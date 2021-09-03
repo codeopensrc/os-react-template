@@ -1,13 +1,7 @@
 'use strict';
 
 const url = require("url");
-
-const { auth } = require("os-npm-util");
-
-const DEV_ENV = process.env.DEV_ENV === "true";
-const DEFAULT_AUTH_URL = `http://auth_${DEV_ENV?"dev":"main"}:80`
-auth.USE_AUTH = process.env.USE_AUTH === "true";
-auth.URL = process.env.AUTH_URL ? process.env.AUTH_URL : DEFAULT_AUTH_URL
+const auth = require("./auth.js");
 
 const routes = function (req, res) {
 

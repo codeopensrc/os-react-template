@@ -2,38 +2,19 @@
 
 const url = require("url");
 
-const consul = require('consul')({host:"172.17.0.1"});
-const { auth } = require("os-npm-util");
+const CONSUL_HOST = process.env.CONSUL_HOST || "172.17.0.1";
 
+const consul = require('consul')({host: CONSUL_HOST});
+const auth = require("./auth.js");
 const serverState = require("./serverState.js");
-
-const DEV_ENV = process.env.DEV_ENV === "true";
-const DEFAULT_AUTH_URL = `http://auth_${DEV_ENV?"dev":"main"}:80`
-auth.USE_AUTH = process.env.USE_AUTH === "true";
-auth.URL = process.env.AUTH_URL ? process.env.AUTH_URL : DEFAULT_AUTH_URL
-
-// Use consul to connect to DB
-const USE_CONSUL = process.env.USE_CONSUL_DB === "true" || !DEV_ENV
-
-// Must supply a DEV_DATABASE_URL if not using consul
-const DEV_DB_URL = process.env.DEV_DATABASE_URL ? process.env.DEV_DATABASE_URL : ""
-
+const ObjectID = require("mongodb").ObjectID;
+const mongo = require('mongodb').MongoClient
 
 const CONSUL_RETRY_INTERVAL = 1000 * 2
 const DB_RETRY_INTERVAL = 1000 * 2
 
-// Mongo
-// const mongo = require('mongodb').MongoClient
-// const ObjectID = require("mongodb").ObjectID;
-const DEFAULT_MONGO_DB_NAME = "mymongo"
-const DEFAULT_MONGO_DB_URL = `mongodb://172.17.0.1:27017/${DEFAULT_MONGO_DB_NAME}`
-
-// PG
-//
-//
-//
-
-
+const MONGO_DB_NAME = process.env.MONGO_DB_NAME || "react";
+const DEV_DB_URL = process.env.DEV_DATABASE_URL || "";
 
 module.exports = {
 
@@ -49,12 +30,12 @@ module.exports = {
         // If we're not on localhost, we're gonna look for it in consul
         // Not many (if any) occasions where we would be using a dev_database_url
         //   in a production env/non-dev env
-        if(!DEV_DB_URL || USE_CONSUL) {
+        if(!DEV_DB_URL) {
             consul.catalog.service.nodes("mongo", (err, res) => {
                 if (err) { console.log("ERR - db.js", err); }
                 let host = res && res[0] ? res[0].Address : ""
                 let port = res && res[0] ? res[0].ServicePort : ""
-                let connectionString = `mongodb://${host}:${port}/rer`
+                let connectionString = `mongodb://${host}:${port}/${MONGO_DB_NAME}`
                 if(!host) {
                     console.log("No Mongo Host found for DB.js");
                     setTimeout(this.init.bind(this), CONSUL_RETRY_INTERVAL);

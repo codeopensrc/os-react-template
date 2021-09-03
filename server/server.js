@@ -6,25 +6,25 @@ const fs = require("fs");
 const url = require("url");
 const path = require("path");
 const qs = require('querystring');
-const zlib = require('zlib');
-
+const zlib = require("zlib")
+const crypto = require("crypto")
 const { service } = require("os-npm-util");
 const routes = require("./routes.js");
 const serverState = require("./serverState.js");
 
-const BIN = process.env.BIN;
-const PUB_FILES = process.env.PUB_FILES;
-const STATIC_FILES = process.env.STATIC_FILES;
-const OUTPUT_FILES = process.env.OUTPUT_FILES;
+const BIN = process.env.BIN || "./server/bin";
+const PUB_FILES = process.env.PUB_FILES || "./pub";
+const STATIC_FILES = process.env.STATIC_FILES || "./server/static";
+const OUTPUT_FILES = process.env.OUTPUT_FILES || "./server/output";
 const DEV_ENV = process.env.DEV_ENV === "true"
 const REGISTER_SERVICE = process.env.REGISTER_SERVICE === "true";
-const SERVICE_NAME = process.env.SERVICE_NAME ? process.env.SERVICE_NAME : ""
-const SERVE_FROM_PUB_DIR = ["app.bundle.js", "favicon.ico"]
+const CONSUL_SERVICE_NAME = process.env.CONSUL_SERVICE_NAME || "react-template"
+const SERVE_FROM_PUB_DIR = ["404.html", "favicon.ico", "app.bundle.js", "index.html"]
 
 service.setConfig({
     register: REGISTER_SERVICE,
     devEvn: DEV_ENV,
-    serviceName: SERVICE_NAME
+    serviceName: CONSUL_SERVICE_NAME
 })
 
 serverState.registerConnection("http")
@@ -95,35 +95,48 @@ const server = {
                 ".pdf": { mime: "application/pdf", encoding: "utf8" },
                 ".sh": { mime: "text/plain", encoding: "utf8" }
             }
-            let filePath = exts[extname] ? PUB_FILES+file : PUB_FILES+"index.html";
+            let filePath = exts[extname] ? STATIC_FILES+"/"+file : PUB_FILES+"/"+"index.html";
             let contentType = exts[extname] ? exts[extname].mime : 'text/html';
             let encoding = exts[extname] ? exts[extname].encoding : "utf8";
 
             if(file.indexOf("wasm.gz") > 1 || file.indexOf("wasm.unityweb") > 1) { contentType = "application/wasm" }
             if(file.indexOf("js.gz") > 1 || file.indexOf("js.unityweb") > 1) { contentType = "text/javascript" }
             if(file.indexOf("data.gz") > 1 || file.indexOf("data.unityweb") > 1) { contentType = "text/javascript" }
-            SERVE_FROM_PUB_DIR.forEach((pubFile) => file.match(pubFile) && (filePath = PUB_FILES+pubFile) )
+            SERVE_FROM_PUB_DIR.forEach((pubFile) => file.match(pubFile) && (filePath = PUB_FILES+"/"+pubFile) )
 
             let readable = fs.createReadStream(filePath, {encoding: encoding})
 
             readable.on("error", () => {
                 res.writeHead(404, {"Content-Type": 'text/html'});
-                fs.createReadStream(`${PUB_FILES}404.html`).pipe(res)
+                fs.createReadStream(`${PUB_FILES}/404.html`).pipe(res)
             })
 
             readable.on("open", () => {
-                let isIndex = filePath.match(`${PUB_FILES}index.html`)
+                let isIndex = filePath.match(`${PUB_FILES}/index.html`)
 
                 if(extname.indexOf("gz") > -1 || extname.indexOf("unityweb") > -1) { res.setHeader("Content-Encoding", "gzip"); }
 
                 // TODO: We need to implement authentication for downloading files.
                 if(req.url.indexOf("/download/") > -1 && !isIndex) {
-                    res.setHeader('Content-Disposition', 'attachment; filename='+path.basename(STATIC_FILES+file));
-                    filePath = STATIC_FILES+file.replace("download/", "");
+                    res.setHeader('Content-Disposition', 'attachment; filename='+path.basename(STATIC_FILES+"/"+file));
+                    filePath = STATIC_FILES+"/"+file.replace("download/", "");
                 }
 
-                res.setHeader('Cache-Control', 'public, max-age=' + (60 * 60 * 24 * 30))
-                res.writeHead(200, {"Content-Type": contentType});
+                let lastMod = fs.statSync(filePath).mtime.toString()
+                let lastModHash = crypto.createHash('sha1').update(lastMod).digest('hex');
+                let ifNoneMatchValue = req.headers['if-none-match']
+
+                res.setHeader('Content-Type', contentType)
+                res.setHeader('Cache-Control', 'max-age='+ (60 * 60 * 24 * 30))
+                res.setHeader('Vary', 'ETag, Content-Encoding')
+                res.setHeader('ETag', lastModHash)
+
+                if(ifNoneMatchValue && ifNoneMatchValue === lastModHash) {
+                    res.writeHead(304)
+                    return res.end()
+                }
+
+                res.writeHead(200);
 
                 contentType == "application/gzip" && readable.pipe(zlib.createGunzip()).pipe(res)
                 contentType != "application/gzip" && !isIndex && readable.pipe(res)

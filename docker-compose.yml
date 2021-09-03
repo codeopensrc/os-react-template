@@ -1,24 +1,53 @@
 version: "3.5"
+x-buildargs:
+    &default-buildargs
+    BASE_IMAGE: alpine
+    BASE_IMAGE_TAG: 3.14
+    NODE_VER: 14.17.6-r0
+    NPM_VER: 7.17.0-r0
+    PM2_VER: 5.1.1
+volumes:
+    temp_data:
 services:
+    dev:
+        image: react/app:dev
+        ports: ["5005:80"]
+        build:
+            context: .
+            target: src
+            args: *default-buildargs
+        volumes:
+            - "${FOLDER_LOCATION:-.}/src:/home/app/src"
+            - "${FOLDER_LOCATION:-.}/server:/home/app/server"
+            - "${FOLDER_LOCATION:-.}/docker-compose.yml:/home/app/docker-compose.yml"
+        environment:
+            DEV_DATABASE_URL: "mongodb://mongodb:27017/${MONGO_DB_NAME:-react}"
+            LOG_EVERY_NUM_CHECKS: 5
+            DEV_ENV:          "true"
+        depends_on:
+            - mongodb
+    #### Dev DB service ===
+    mongodb:
+        image: mongo
+        restart: on-failure
+        environment:
+            MONGO_INITDB_DATABASE: "${MONGO_DB_NAME:-react}"
+        volumes:
+            - temp_data:/data/db
+    ###############################################################
+    ###############################################################
     main:
+        image: registry.codeopensrc.com/os/react-template/app:0.3.0
+        ports: ["5000:80"]
         build:
             context: .
             target: prod
-        image: registry.codeopensrc.com/os/react:0.3.0
-        ports:
-            - "5000:80"
-        deploy:
-            replicas: 1
-            update_config:
-                parallelism: 1
-                delay: 10s
-                failure_action: rollback
-                max_failure_ratio: .3
-                order: start-first
-            restart_policy:
-                max_attempts: 3
-                condition: on-failure
-            placement:
-                preferences:
-                    - spread: node.labels.dc
-                    - spread: node.labels.az
+            args: *default-buildargs
+        environment:
+            CONSUL_SERVICE_NAME:    "react-template"
+            REGISTER_SERVICE:       "false"
+            AUTH_URL:               "${AUTH_URL}"
+            ## Secrets - see .env.tmpl
+            SAMPLE_SECRET:          "${SAMPLE_SECRET}"
+        ## Docker Swarm - https://docs.docker.com/compose/compose-file/compose-file-v3/#deploy
+        ## deploy:

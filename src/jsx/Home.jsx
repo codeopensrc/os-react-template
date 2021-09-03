@@ -39,6 +39,8 @@ class Home extends React.Component {
                 This is the page/component that loads when no other URL path is specified.
                 <br />
                 Click the "About" navigation button to head to the example "About.jsx" Page.
+                <br />
+                Dev
             </div>
         );
     }

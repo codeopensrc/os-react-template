@@ -1,0 +1,205 @@
+stages:
+  - build
+  - build_rc
+  - deploy
+  - clean
+
+variables:
+  PROJECT_APP_IMAGE: $CI_REGISTRY_IMAGE/app
+  SERVICE_NAME: react-template 
+  #KUBERNETES_SERVICE_ACCOUNT_OVERWRITE
+
+.docker_login: &docker_login
+  docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+
+.not_protected: &not_protected
+  '$CI_COMMIT_REF_NAME != "dev" && $CI_COMMIT_REF_NAME != "master"'
+
+.is_dev_branch: &is_dev_branch
+  '$CI_COMMIT_REF_NAME == "dev" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
+
+.create_rc: &create_rc
+  - CURVER=$(git describe --abbrev=0 --tags)
+  - MAJOR_MINOR=$(echo $CURVER | cut -d "." -f 1-2)
+  - PATCH=$(echo $CURVER | cut -d "." -f 3)
+  - NEXT_PATCH=$(($PATCH + 1))
+  - RC=${MAJOR_MINOR}.${NEXT_PATCH}-rc
+
+echo_env_vars:
+  stage: build
+  script:
+  - echo $CI_COMMIT_TAG
+  - echo $CI_REGISTRY_IMAGE
+  - echo $CI_COMMIT_REF_NAME
+  - echo $CI_REPOSITORY_URL
+  - echo $CI_SERVER_URL
+  - echo $CI_SERVER_HOST
+  - echo $CI_PROJECT_URL
+  - echo $CI_PIPELINE_IID
+  - echo $CI_COMMIT_BRANCH
+  - echo $CI_PIPELINE_SOURCE
+  - echo $CI_MERGE_REQUEST_EVENT_TYPE
+  - echo $CI_MERGE_REQUEST_ID
+  - echo $CI_MERGE_REQUEST_IID
+  - echo $CI_MERGE_REQUEST_REF_PATH
+  - echo $CI_MERGE_REQUEST_SOURCE_BRANCH_SHA
+  - echo $CI_COMMIT_BEFORE_SHA
+  - echo $CI_COMMIT_SHA
+  - echo $CI_MERGE_REQUEST_TARGET_BRANCH_SHA
+  - echo $CI_PROJECT_NAME
+  - echo $CI_PROJECT_NAMESPACE
+  - echo $CI_PROJECT_PATH
+
+
+########################
+#### FEATURE BRANCH
+########################
+build_commit:
+  stage: build
+  script:
+  - *docker_login
+  - docker pull $PROJECT_APP_IMAGE:dev || echo 0
+  - docker build -f Dockerfile --force-rm --cache-from $PROJECT_APP_IMAGE:dev --target src -t $PROJECT_APP_IMAGE:$CI_COMMIT_SHORT_SHA .
+  - docker push $PROJECT_APP_IMAGE:$CI_COMMIT_SHORT_SHA
+  rules:
+  - if: *not_protected
+
+deploy_commit:
+  tags:
+    - prod
+  stage: deploy
+  script:
+  - *docker_login
+  - echo "$KUBE_NAMESPACE"
+  - echo "$KUBE_INGRESS_BASE_DOMAIN"
+  - "echo \"APPNAME: ${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}\""
+  - "echo \"URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
+    ## https://docs.gitlab.com/ee/user/project/clusters/deploy_to_cluster.html
+  - "kubectl create secret docker-registry gitlab-registry --docker-server=\"$CI_REGISTRY\" \
+     --docker-username=\"$CI_REGISTRY_USER\" --docker-password=\"$CI_REGISTRY_PASSWORD\" \
+     -o yaml --dry-run=client | kubectl apply -f -"
+  - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME} -t $CI_COMMIT_SHORT_SHA
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    url: "http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+    on_stop: stop_commit
+    auto_stop_in: 1 day
+    kubernetes:
+      namespace: ${KUBE_NAMESPACE}
+  rules: 
+  - if: *not_protected
+
+stop_commit:
+  tags:
+  - prod
+  stage: deploy
+  script:
+  - echo "Stop commit"
+  - echo ${KUBE_NAMESPACE}
+  - "kubectl delete all --all -n ${KUBE_NAMESPACE}"
+    ### TODO: On successful merge into dev, delete environment/namespace
+    ###  Or create a manual job at the end that we push to destroy?
+    ### In general just need when branch is destroyed to rm namespance and environment
+    # General thoughts: Need to give the runner temporary access to an elevated kubeconfig that can modify
+    #  namespaces most likely. So we'll need to learn how to deal with service accounts and
+    #  make one where its only ability is to delete only these certain namespaces.
+    #  Runner locked to specific projects
+    #  Cannot run on jobs without tags
+    #  Only runs on protected branches
+    #  NS              ACC
+    #  kube-system     gitlab
+    #  This is how the gitlab service account is setup, need to view how RBAC works and if we can
+    #    do regex matches on things
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: stop
+    kubernetes:
+      namespace: ${KUBE_NAMESPACE}
+  rules: 
+  - if: *not_protected
+    when: manual
+
+
+########################
+#### DEV BRANCH
+########################
+build_src:
+  stage: build
+  script:
+  - *docker_login
+  - docker pull $PROJECT_APP_IMAGE:dev || echo 0
+  - docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev --target src -t $PROJECT_APP_IMAGE:dev .
+  - docker push $PROJECT_APP_IMAGE:dev
+  rules: 
+  - if: *is_dev_branch
+
+build_rc:
+  stage: build_rc
+  script:
+  - *docker_login
+  - git fetch && git reset --hard origin/dev
+  - *create_rc
+    #- sed -i "s|${CURVER}-*.*|$RC|" docker-compose.yml
+  - docker pull $PROJECT_APP_IMAGE:dev
+  - docker pull $PROJECT_APP_IMAGE:$RC || echo 0
+  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev \
+     --cache-from $PROJECT_APP_IMAGE:$RC --target prod -t $PROJECT_APP_IMAGE:$RC ."
+  - docker push $PROJECT_APP_IMAGE:$RC
+  rules: 
+  - if: *is_dev_branch
+
+deploy_rc:
+  tags:
+  - prod
+  stage: deploy
+  script:
+  - *docker_login
+  - git fetch && git reset --hard origin/dev
+  - *create_rc
+  - echo "$KUBE_NAMESPACE"
+  - echo "$KUBE_INGRESS_BASE_DOMAIN"
+  - "echo \"APPNAME: ${SERVICE_NAME}\""
+  - "echo \"URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
+    ## https://docs.gitlab.com/ee/user/project/clusters/deploy_to_cluster.html
+  - "kubectl create secret docker-registry gitlab-registry --docker-server=\"$CI_REGISTRY\" \
+     --docker-username=\"$CI_REGISTRY_USER\" --docker-password=\"$CI_REGISTRY_PASSWORD\" \
+     -o yaml --dry-run=client | kubectl apply -f -"
+  - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC 
+  environment:
+    name: dev
+    url: "http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+    on_stop: stop_rc
+    auto_stop_in: 1 day
+    kubernetes:
+      namespace: ${KUBE_NAMESPACE}
+  rules: 
+  - if: *is_dev_branch
+
+stop_rc:
+  tags:
+  - prod
+  stage: deploy
+  script:
+  - echo "Stop rc"
+  - echo ${KUBE_NAMESPACE}
+  - "kubectl delete all --all -n ${KUBE_NAMESPACE}"
+  environment:
+    name: dev
+    action: stop
+    kubernetes:
+      namespace: ${KUBE_NAMESPACE}
+  rules: 
+  - if: *is_dev_branch
+    when: manual
+
+
+########################
+#### MASTER BRANCH
+########################
+.cleanup:
+  stage: clean
+  script:
+  - echo "CLEAN"
+  rules:
+  - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME != "dev" && $CI_COMMIT_REF_NAME != "master"'
+    when: manual

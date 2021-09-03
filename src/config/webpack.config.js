@@ -6,7 +6,7 @@ const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 let plugins = [ new HtmlWebpackPlugin({
-        template: "./pub/template.html",
+        template: "./src/html/template.html",
         filename: "index.html",
         hash: true
     })
