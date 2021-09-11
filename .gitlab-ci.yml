@@ -1,54 +1,74 @@
 stages:
+  - build_src
   - build
-  - build_rc
   - deploy
-  - clean
+  - stop
+  - commit
+  - release
+  - deploy_prod
 
 variables:
   PROJECT_APP_IMAGE: $CI_REGISTRY_IMAGE/app
-  SERVICE_NAME: react-template 
-  #KUBERNETES_SERVICE_ACCOUNT_OVERWRITE
+  SERVICE_NAME: react-template
+  #KUBERNETES_SERVICE_ACCOUNT_OVERWRITE:
 
 .docker_login: &docker_login
   docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
 
 .not_protected: &not_protected
-  '$CI_COMMIT_REF_NAME != "dev" && $CI_COMMIT_REF_NAME != "master"'
+  '$CI_COMMIT_REF_NAME != "dev" && $CI_COMMIT_REF_NAME != "master" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
 
 .is_dev_branch: &is_dev_branch
   '$CI_COMMIT_REF_NAME == "dev" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
 
+.is_web_master_run: &is_web_master_run
+  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"'
+
+.is_web_master_patch: &is_web_master_patch
+  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
+
+.is_web_master_release: &is_web_master_release
+  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE != null'
+
+.get_current_version: &get_current_version
+  - DOCKER_SERVICE_NAME="main:"
+  - PROD_IMAGE=$(awk "/${DOCKER_SERVICE_NAME}/{getline; print; exit;}" docker-compose.yml)
+  - CURVER=$(echo $PROD_IMAGE | cut -d ":" -f3 | cut -d "-" -f1)
+
+.exit_if_sha_matches_patch: &exit_if_sha_matches_patch
+  - LAST_CI_SHA=$(git log --oneline | grep -A 1 "Patch\|Release" | cut -d " " -f1 | awk NR==1) # Last Patch/Release commit
+  - echo $LAST_CI_SHA
+  - "[[ $COMMIT_SHA = $LAST_CI_SHA ]] && exit 0"
+
 .create_rc: &create_rc
-  - CURVER=$(git describe --abbrev=0 --tags)
+  - *get_current_version
   - MAJOR_MINOR=$(echo $CURVER | cut -d "." -f 1-2)
   - PATCH=$(echo $CURVER | cut -d "." -f 3)
   - NEXT_PATCH=$(($PATCH + 1))
   - RC=${MAJOR_MINOR}.${NEXT_PATCH}-rc
 
+.create_next: &create_next
+  - *get_current_version
+  - MAJOR=$(echo $CURVER | cut -d "." -f 1)
+  - MINOR=$(echo $CURVER | cut -d "." -f 2)
+  - PATCH=$(echo $CURVER | cut -d "." -f 3)
+  - NEXT_MAJOR=$(($MAJOR + 1))
+  - NEXT_MINOR=$(($MINOR + 1))
+  - NEXT_PATCH=$(($PATCH + 1))
+
+workflow:
+  rules:
+  - if: $CI_COMMIT_TAG
+    when: never
+  - when: always
+
 echo_env_vars:
   stage: build
   script:
-  - echo $CI_COMMIT_TAG
-  - echo $CI_REGISTRY_IMAGE
-  - echo $CI_COMMIT_REF_NAME
-  - echo $CI_REPOSITORY_URL
-  - echo $CI_SERVER_URL
-  - echo $CI_SERVER_HOST
-  - echo $CI_PROJECT_URL
-  - echo $CI_PIPELINE_IID
-  - echo $CI_COMMIT_BRANCH
   - echo $CI_PIPELINE_SOURCE
-  - echo $CI_MERGE_REQUEST_EVENT_TYPE
-  - echo $CI_MERGE_REQUEST_ID
-  - echo $CI_MERGE_REQUEST_IID
-  - echo $CI_MERGE_REQUEST_REF_PATH
-  - echo $CI_MERGE_REQUEST_SOURCE_BRANCH_SHA
-  - echo $CI_COMMIT_BEFORE_SHA
-  - echo $CI_COMMIT_SHA
-  - echo $CI_MERGE_REQUEST_TARGET_BRANCH_SHA
-  - echo $CI_PROJECT_NAME
-  - echo $CI_PROJECT_NAMESPACE
-  - echo $CI_PROJECT_PATH
+  - export
+  rules:
+  - if: $CI_PIPELINE_SOURCE != "merge_request_event"
 
 
 ########################
@@ -62,140 +82,363 @@ build_commit:
   - docker build -f Dockerfile --force-rm --cache-from $PROJECT_APP_IMAGE:dev --target src -t $PROJECT_APP_IMAGE:$CI_COMMIT_SHORT_SHA .
   - docker push $PROJECT_APP_IMAGE:$CI_COMMIT_SHORT_SHA
   rules:
+  - if: $CI_PIPELINE_SOURCE != "push" && $CI_PIPELINE_SOURCE != "web"
+    when: never
   - if: *not_protected
 
-deploy_commit:
-  tags:
-    - prod
+deploy_review:
   stage: deploy
+  tags:
+  - kubernetes
   script:
-  - *docker_login
   - echo "$KUBE_NAMESPACE"
-  - echo "$KUBE_INGRESS_BASE_DOMAIN"
   - "echo \"APPNAME: ${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}\""
   - "echo \"URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
-    ## https://docs.gitlab.com/ee/user/project/clusters/deploy_to_cluster.html
-  - "kubectl create secret docker-registry gitlab-registry --docker-server=\"$CI_REGISTRY\" \
-     --docker-username=\"$CI_REGISTRY_USER\" --docker-password=\"$CI_REGISTRY_PASSWORD\" \
-     -o yaml --dry-run=client | kubectl apply -f -"
-  - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME} -t $CI_COMMIT_SHORT_SHA
+  - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME} -t $CI_COMMIT_SHORT_SHA -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}" -n $KUBE_NAMESPACE
+  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
   environment:
-    name: $CI_COMMIT_REF_NAME
+    name: review/$CI_COMMIT_REF_NAME
     url: "http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
-    on_stop: stop_commit
+    on_stop: stop_review
     auto_stop_in: 1 day
-    kubernetes:
-      namespace: ${KUBE_NAMESPACE}
-  rules: 
+  rules:
   - if: *not_protected
 
-stop_commit:
+stop_review:
+  stage: stop
   tags:
-  - prod
-  stage: deploy
+  - kubernetes
   script:
   - echo "Stop commit"
   - echo ${KUBE_NAMESPACE}
-  - "kubectl delete all --all -n ${KUBE_NAMESPACE}"
-    ### TODO: On successful merge into dev, delete environment/namespace
-    ###  Or create a manual job at the end that we push to destroy?
-    ### In general just need when branch is destroyed to rm namespance and environment
-    # General thoughts: Need to give the runner temporary access to an elevated kubeconfig that can modify
-    #  namespaces most likely. So we'll need to learn how to deal with service accounts and
-    #  make one where its only ability is to delete only these certain namespaces.
-    #  Runner locked to specific projects
-    #  Cannot run on jobs without tags
-    #  Only runs on protected branches
-    #  NS              ACC
-    #  kube-system     gitlab
-    #  This is how the gitlab service account is setup, need to view how RBAC works and if we can
-    #    do regex matches on things
+  - kubectl delete deploy,services ${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME} || exit 0;
   environment:
-    name: $CI_COMMIT_REF_NAME
+    name: review/$CI_COMMIT_REF_NAME
     action: stop
-    kubernetes:
-      namespace: ${KUBE_NAMESPACE}
-  rules: 
+  rules:
   - if: *not_protected
     when: manual
 
 
 ########################
+########################
 #### DEV BRANCH
 ########################
+########################
+
 build_src:
-  stage: build
+  stage: build_src
   script:
   - *docker_login
   - docker pull $PROJECT_APP_IMAGE:dev || echo 0
   - docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev --target src -t $PROJECT_APP_IMAGE:dev .
   - docker push $PROJECT_APP_IMAGE:dev
-  rules: 
+  rules:
   - if: *is_dev_branch
 
 build_rc:
-  stage: build_rc
+  stage: build
   script:
   - *docker_login
-  - git fetch && git reset --hard origin/dev
   - *create_rc
-    #- sed -i "s|${CURVER}-*.*|$RC|" docker-compose.yml
   - docker pull $PROJECT_APP_IMAGE:dev
   - docker pull $PROJECT_APP_IMAGE:$RC || echo 0
   - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev \
-     --cache-from $PROJECT_APP_IMAGE:$RC --target prod -t $PROJECT_APP_IMAGE:$RC ."
+    --cache-from $PROJECT_APP_IMAGE:$RC --target prod -t $PROJECT_APP_IMAGE:$RC ."
   - docker push $PROJECT_APP_IMAGE:$RC
-  rules: 
+  rules:
   - if: *is_dev_branch
 
 deploy_rc:
-  tags:
-  - prod
   stage: deploy
+  tags:
+  - kubernetes_prod
   script:
-  - *docker_login
-  - git fetch && git reset --hard origin/dev
   - *create_rc
   - echo "$KUBE_NAMESPACE"
-  - echo "$KUBE_INGRESS_BASE_DOMAIN"
   - "echo \"APPNAME: ${SERVICE_NAME}\""
   - "echo \"URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
-    ## https://docs.gitlab.com/ee/user/project/clusters/deploy_to_cluster.html
-  - "kubectl create secret docker-registry gitlab-registry --docker-server=\"$CI_REGISTRY\" \
-     --docker-username=\"$CI_REGISTRY_USER\" --docker-password=\"$CI_REGISTRY_PASSWORD\" \
-     -o yaml --dry-run=client | kubectl apply -f -"
-  - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC 
+  - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
+  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
   environment:
     name: dev
     url: "http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
     on_stop: stop_rc
     auto_stop_in: 1 day
     kubernetes:
-      namespace: ${KUBE_NAMESPACE}
-  rules: 
+      namespace: dev
+  rules:
   - if: *is_dev_branch
 
 stop_rc:
+  stage: stop
   tags:
-  - prod
-  stage: deploy
+  - kubernetes_prod
   script:
   - echo "Stop rc"
-  - echo ${KUBE_NAMESPACE}
-  - "kubectl delete all --all -n ${KUBE_NAMESPACE}"
+  - kubectl delete deploy,services ${SERVICE_NAME} || exit 0;
   environment:
     name: dev
     action: stop
     kubernetes:
-      namespace: ${KUBE_NAMESPACE}
-  rules: 
+      namespace: dev
+  rules:
   - if: *is_dev_branch
     when: manual
 
 
 ########################
+########################
 #### MASTER BRANCH
 ########################
+########################
+
+### Only build on each new push to master
+build_beta:
+  stage: build
+  tags:
+  - prod
+  script:
+  - *docker_login
+  - *create_rc
+  - docker pull $PROJECT_APP_IMAGE:dev
+  - docker pull $PROJECT_APP_IMAGE:$RC || echo 0 #Remove echo if we ALWAYS want a rc build first
+  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev \
+    --cache-from $PROJECT_APP_IMAGE:$RC --target prod -t $PROJECT_APP_IMAGE:${RC}-beta ."
+  - docker push $PROJECT_APP_IMAGE:${RC}-beta
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "master"
+
+#### Cannot manually web run directly after a release - no properly tagged beta build (nothing new)
+#### The point is to capture the merge/push to master to prepare for release (possibly start doing a release branch)
+#### Beta environment can be restarted from gitlab UI if it wasn't deleted
+deploy_beta:
+  stage: deploy
+  tags:
+  - kubernetes_prod
+  script:
+  - *create_rc
+  - echo "$KUBE_NAMESPACE"
+  - "echo \"APPNAME: ${SERVICE_NAME}\""
+  - "echo \"URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
+  - bash kube-deploy.sh -r ${CI_REGISTRY} -t ${RC}-beta -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
+  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
+  environment:
+    name: beta
+    url: "https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+    on_stop: stop_beta
+    auto_stop_in: 7 days
+    kubernetes:
+      namespace: beta
+  rules:
+  - if: '$SKIP_BETA == "true" ||  $RELEASE != null'
+    when: never
+  - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
+
+stop_beta:
+  stage: stop
+  tags:
+  - kubernetes_prod
+  script:
+  - echo "Stop beta"
+  - kubectl delete deploy,services ${SERVICE_NAME} || exit 0;
+  environment:
+    name: beta
+    action: stop
+    kubernetes:
+      namespace: beta
+  rules:
+  - if: '$SKIP_BETA == "true" ||  $RELEASE != null || $KEEP_BETA != null'
+    when: never
+  - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
+    when: manual
+
+###############################
+###   Not Tag Commit  -  $RELEASE is not defined
+###############################
+commit_patch:
+  stage: commit
+  tags:
+  - prod
+  resource_group: commit
+  script:
+  - *get_current_version
+  - echo $CURVER
+  - COMMIT_SHA=$(git log -1 --pretty=format:%h)
+  - echo $COMMIT_SHA
+  - *exit_if_sha_matches_patch
+  - sed -i "s|${CURVER}-*.*|${CURVER}-${COMMIT_SHA}|" docker-compose.yml
+  - git add docker-compose.yml
+  - "git commit -m \"Patch: ${CURVER}-${COMMIT_SHA}\" || echo 0" ## If nothing to commit, exits 1
+  - "git remote set-url origin https://${PUSH_TOKEN_NAME}:${PUSH_TOKEN_VALUE}@$CI_SERVER_HOST/$CI_PROJECT_PATH"
+  - git push -o ci.skip origin HEAD:master
+  rules:
+  - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
+    when: on_success
+  - if: *is_web_master_patch
+    when: manual
+
+release_patch:
+  stage: release
+  tags:
+  - prod
+  script:
+  - *docker_login
+  - *create_rc
+  - echo $CURVER
+  - echo $RC
+  - COMMIT_SHA=$(git log -1 --pretty=format:%h)
+  - echo $COMMIT_SHA
+  - *exit_if_sha_matches_patch
+  - docker pull $PROJECT_APP_IMAGE:dev
+  - docker pull $PROJECT_APP_IMAGE:${RC}-beta || echo 0 #Remove echo if we ALWAYS want a rc-beta build first
+  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev \
+    --target src -t $PROJECT_APP_IMAGE:dev ."
+  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev --cache-from $PROJECT_APP_IMAGE:${RC}-beta \
+    --target prod -t $PROJECT_APP_IMAGE:$CURVER-${COMMIT_SHA} ."
+  - docker tag $PROJECT_APP_IMAGE:$CURVER-${COMMIT_SHA} $PROJECT_APP_IMAGE:latest
+  - docker push $PROJECT_APP_IMAGE:dev
+  - docker push $PROJECT_APP_IMAGE:$CURVER-${COMMIT_SHA}
+  - docker push $PROJECT_APP_IMAGE:latest
+  rules:
+  - if: *is_web_master_patch
+
+
+
+###############################
+###   Tag Version Commit -  $RELEASE is defined
+###############################
+commit_version:
+  stage: commit
+  tags:
+  - prod
+  script:
+  - echo $RELEASE
+  - *create_next
+  - echo $CURVER
+  - "[[ $RELEASE == 'major' ]] && VERSION=${NEXT_MAJOR}.0.0"
+  - "[[ $RELEASE == 'minor' ]] && VERSION=${MAJOR}.${NEXT_MINOR}.0"
+  - "[[ $RELEASE == 'patch' ]] && VERSION=${MAJOR}.${MINOR}.${NEXT_PATCH}"
+  - echo ${VERSION}
+  - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
+  - git add docker-compose.yml
+  - "git commit -m \"Release: ${VERSION}\" || echo 0" ## If nothing to commit, exits 1
+  - git tag ${VERSION}
+  - "git remote set-url origin https://${PUSH_TOKEN_NAME}:${PUSH_TOKEN_VALUE}@$CI_SERVER_HOST/$CI_PROJECT_PATH"
+  - git push -o ci.skip origin HEAD:master --tags
+  rules:
+  - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE != null'
+    when: on_success
+  - if: *is_web_master_release
+    when: manual
+
+
+release_version:
+  stage: release
+  tags:
+   - prod
+  script:
+  - *docker_login
+  - *get_current_version
+  - echo $CURVER
+
+    ### NOTE: With this method we ALWAYS need a patch on master before a release
+  - IMAGE_SHA=$(git log --oneline | grep -A 1 Patch | cut -d " " -f1 | awk NR==2) # Commit before Patch commit
+  - docker pull $PROJECT_APP_IMAGE:dev
+  - docker pull $PROJECT_APP_IMAGE:${CURVER}-${IMAGE_SHA}
+
+    ## Because this happens in the same pipeline as the tag push and we fetch instead of fresh clone
+    ## Maybe change the GIT_STRATEGY for this job
+  - git fetch && git reset --hard origin/master
+  - RELEASE_VER=$(git describe --abbrev=0 --tags)
+
+  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev \
+    --cache-from $PROJECT_APP_IMAGE:${CURVER}-${IMAGE_SHA} --target prod -t $PROJECT_APP_IMAGE:$RELEASE_VER ."
+  - docker tag $PROJECT_APP_IMAGE:$RELEASE_VER $PROJECT_APP_IMAGE:latest
+  - docker push $PROJECT_APP_IMAGE:$RELEASE_VER
+  - docker push $PROJECT_APP_IMAGE:latest
+  rules:
+  - if: *is_web_master_release
+
+
+
+###############################
+###   Deploy from master branch
+###############################
+
+### Atm this doesnt reflect the Patch or Release commit in the environment UI even though we `reset --hard` to it
+###  due to this job being part of the same pipeline as the commit. Need to figure out how to trigger a pipeline
+###  from the Patch or Release commit to properly reflect in the environment UI.
+### We then also wouldnt have to `git reset --hard origin/master`
+### Triggering another pipeline feels like an option. Not sure setting the GIT_STRATEGY helps with this problem
+
+deploy_production:
+  stage: deploy_prod
+  tags:
+  - kubernetes_prod
+  script:
+  - echo "$KUBE_NAMESPACE"
+  - "echo \"APPNAME: ${SERVICE_NAME}\""
+  - "echo \"URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
+    ## Because this happens in the same pipeline as the tag push and we fetch instead of fresh clone
+    ## Maybe change the GIT_STRATEGY for this job
+  - git fetch && git reset --hard origin/master
+  - bash kube-deploy.sh -r ${CI_REGISTRY} -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
+  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
+  environment:
+    name: production
+    url: "https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+    #on_stop: stop_production
+    kubernetes:
+      namespace: production
+  rules:
+  - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"'
+    when: on_success
+  - if: *is_web_master_run
+    when: manual
+
+    ## stop_production:
+    ##   stage: stop_prod
+    ##   tags:
+    ##   - kubernetes_prod
+    ##   script:
+    ##   - echo "Stop prod"
+    ##   - kubectl delete deployments.apps,services ${SERVICE_NAME}
+    ##   environment:
+    ##     name: production
+    ##     action: stop
+    ##     kubernetes:
+    ##       namespace: production
+    ##   rules:
+    ##   - if: *is_web_master_run
+    ##     when: manual
+
+
+### Good CLI example
+##   stages:
+##     - deploy
+##   deploy_app:
+##     image: bitnami/kubectl:latest
+##     stage: deploy
+##     environment: production
+##     script:
+##       - USER_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+##       - CERTIFICATE_AUTHORITY_DATA=$(cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt | base64 -i -w0 -)
+##       - kubectl config set-cluster k8s --server="https://kubernetes.default.svc"
+##       - kubectl config set clusters.k8s.certificate-authority-data ${CERTIFICATE_AUTHORITY_DATA}
+##       - kubectl config set-credentials gitlab --token="${USER_TOKEN}"
+##       - kubectl config set-context default --cluster=k8s --user=gitlab
+##       - kubectl config use-context default
+##       - kubectl set image deployment my-app web=${CI_REGISTRY}/user/repo/${CI_PROJECT_PATH_SLUG}:${CI_COMMIT_SHORT_SHA} --kubeconfig ./config --namespace default
+
+
+## TODO: Either we configure an elevated runner to delete the tmp namespace after stop/merge (if possible).
+##  Or we run a single project namespace for the review cluster (we setup 4, review dev beta prod. 3 are not gitlab managed)
+## Only concern with NS-per-env is if we delete the env and a duplicate gets made will it cause an issue (seemed so before) - needs testing
 .cleanup:
   stage: clean
   script:
