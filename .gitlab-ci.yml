@@ -9,7 +9,9 @@ stages:
 
 variables:
   PROJECT_APP_IMAGE: $CI_REGISTRY_IMAGE/app
+  PUSH_TOKEN_NAME: ci_push_token
   SERVICE_NAME: react-template
+  SUBDOMAIN: react
   #KUBERNETES_SERVICE_ACCOUNT_OVERWRITE:
 
 .docker_login: &docker_login
@@ -36,7 +38,7 @@ variables:
   - CURVER=$(echo $PROD_IMAGE | cut -d ":" -f3 | cut -d "-" -f1)
 
 .exit_if_sha_matches_patch: &exit_if_sha_matches_patch
-  - LAST_CI_SHA=$(git log --oneline | grep -A 1 "Patch\|Release" | cut -d " " -f1 | awk NR==1) # Last Patch/Release commit
+  - LAST_CI_SHA=$(git log --oneline | grep -A 1 "Patch\|Release" | cut -d " " -f1 | awk NR==1) || echo 0 # Last Patch/Release commit
   - echo $LAST_CI_SHA
   - "[[ $COMMIT_SHA = $LAST_CI_SHA ]] && exit 0"
 
