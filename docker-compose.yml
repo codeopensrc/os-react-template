@@ -37,7 +37,7 @@ services:
     ###############################################################
     ###############################################################
     main:
-        image: registry.codeopensrc.com/os/react-template/app:0.3.0
+        image: registry.codeopensrc.com/os/react-template/app:0.3.0-e7491ad
         ports: ["5000:80"]
         build:
             context: .
