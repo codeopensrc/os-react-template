@@ -37,8 +37,8 @@ default:
   '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE != null'
 
 .trigger_deploy_prod_job: &trigger_deploy_prod_job
-  - curl -X POST --form "variables[SKIP_BETA]=$SKIP_BETA" \
-    "${CI_SERVER_URL}/api/v4/projects/$CI_PROJECT_ID/trigger/pipeline?token=${CI_JOB_TOKEN}&ref=master"
+  - curl -X POST --form "variables[SKIP_BETA]=$SKIP_BETA"
+    "${CI_SERVER_URL}/api/v4/projects/$CI_PROJECT_ID/trigger/pipeline?token=${CI_JOB_TOKEN}&ref=${CI_COMMIT_REF_NAME}"
 
 .get_current_version: &get_current_version
   - DOCKER_SERVICE_NAME="main:"
@@ -117,8 +117,8 @@ deploy_review:
   script:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
-  - "echo \"APPNAME: ${APPNAME}\""
-  - "echo \"URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
+  - 'echo "APPNAME: ${APPNAME}"'
+  - 'echo "URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${APPNAME} -t $CI_COMMIT_SHORT_SHA -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
@@ -182,8 +182,8 @@ deploy_rc:
   script:
   - *create_rc
   - echo "$KUBE_NAMESPACE"
-  - "echo \"APPNAME: ${SERVICE_NAME}\""
-  - "echo \"URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
+  - 'echo "APPNAME: ${SERVICE_NAME}"'
+  - 'echo "URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
@@ -254,8 +254,8 @@ deploy_beta:
   script:
   - *create_rc
   - echo "$KUBE_NAMESPACE"
-  - "echo \"APPNAME: ${SERVICE_NAME}\""
-  - "echo \"URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
+  - 'echo "APPNAME: ${SERVICE_NAME}"'
+  - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - bash kube-deploy.sh -r ${CI_REGISTRY} -t ${RC}-beta -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
@@ -307,8 +307,8 @@ commit_patch:
   - *exit_if_sha_matches_patch
   - sed -i "s|${CURVER}-*.*|${CURVER}-${COMMIT_SHA}|" docker-compose.yml
   - git add docker-compose.yml
-  - "git commit -m \"Patch: ${CURVER}-${COMMIT_SHA}\""
-  - "git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH"
+  - 'git commit -m "Patch: ${CURVER}-${COMMIT_SHA}"'
+  - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH'
   - git push -o ci.skip origin HEAD:master
   rules:
   - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
@@ -355,9 +355,9 @@ commit_version:
   - echo ${VERSION}
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
   - git add docker-compose.yml
-  - "git commit -m \"Release: ${VERSION}\""
+  - 'git commit -m "Release: ${VERSION}"'
   - git tag ${VERSION}
-  - "git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH"
+  - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH'
   - git push -o ci.skip origin HEAD:master --tags
   rules:
   - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE != null'
@@ -402,8 +402,8 @@ deploy_production:
   - kubernetes_prod
   script:
   - echo "$KUBE_NAMESPACE"
-  - "echo \"APPNAME: ${SERVICE_NAME}\""
-  - "echo \"URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
+  - 'echo "APPNAME: ${SERVICE_NAME}"'
+  - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - bash kube-deploy.sh -r ${CI_REGISTRY} -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
