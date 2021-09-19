@@ -121,6 +121,7 @@ deploy_review:
   - "echo \"URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
   - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${APPNAME} -t $CI_COMMIT_SHORT_SHA -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
   environment:
     name: review/$CI_COMMIT_REF_NAME
@@ -142,7 +143,7 @@ stop_review:
   - echo "Stop commit"
   - echo ${KUBE_NAMESPACE}
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
-  - kubectl delete deploy,svc,cm,secret -l "app in (${APPNAME})" || exit 0;
+  - kubectl delete deploy,svc,cm,secret -l "app in (${APPNAME}, ${APPNAME}-tmpdb)" || exit 0;
   environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
@@ -185,6 +186,7 @@ deploy_rc:
   - "echo \"URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
   - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
   environment:
     name: dev
@@ -206,7 +208,7 @@ stop_rc:
     GIT_STRATEGY: none
   script:
   - echo "Stop rc"
-  - kubectl delete deploy,svc,cm,secret -l "app in (${SERVICE_NAME})" || exit 0;
+  - kubectl delete deploy,svc,cm,secret -l "app in (${SERVICE_NAME}, ${SERVICE_NAME}-tmpdb)" || exit 0;
   environment:
     name: dev
     action: stop
@@ -256,6 +258,7 @@ deploy_beta:
   - "echo \"URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}\""
   - bash kube-deploy.sh -r ${CI_REGISTRY} -t ${RC}-beta -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
   environment:
     name: beta
@@ -277,7 +280,7 @@ stop_beta:
     GIT_STRATEGY: none
   script:
   - echo "Stop beta"
-  - kubectl delete deploy,svc,cm,secret -l "app in (${SERVICE_NAME})" || exit 0;
+  - kubectl delete deploy,svc,cm,secret -l "app in (${SERVICE_NAME}, ${SERVICE_NAME}-tmpdb)" || exit 0;
   environment:
     name: beta
     action: stop
