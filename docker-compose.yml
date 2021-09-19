@@ -20,18 +20,20 @@ services:
             - "${FOLDER_LOCATION:-.}/src:/home/app/src"
             - "${FOLDER_LOCATION:-.}/server:/home/app/server"
             - "${FOLDER_LOCATION:-.}/docker-compose.yml:/home/app/docker-compose.yml"
+        env_file: .env
         environment:
-            DEV_DATABASE_URL: "mongodb://mongodb:27017/${MONGO_DB_NAME:-react}"
+            DEV_DATABASE_URL: "mongodb://mongodb:27017/${MONGO_DB_NAME:-mongo}"
             LOG_EVERY_NUM_CHECKS: 5
             DEV_ENV:          "true"
         depends_on:
             - mongodb
     #### Dev DB service ===
     mongodb:
-        image: mongo
+        image: mongo:4.4.6
+        ports: ["27017:27017"]
         restart: on-failure
         environment:
-            MONGO_INITDB_DATABASE: "${MONGO_DB_NAME:-react}"
+            MONGO_INITDB_DATABASE: "${MONGO_DB_NAME:-mongo}"
         volumes:
             - temp_data:/data/db
     ###############################################################
@@ -39,15 +41,15 @@ services:
     main:
         image: registry.codeopensrc.com/os/react-template/app:0.4.0
         ports: ["5000:80"]
+        labels: ["com.codeopensrc.consul=react"]
         build:
             context: .
             target: prod
             args: *default-buildargs
+        env_file: .env
         environment:
-            CONSUL_SERVICE_NAME:    "react-template"
+            CONSUL_SERVICE_NAME:    "react"
             REGISTER_SERVICE:       "false"
             AUTH_URL:               "${AUTH_URL}"
-            ## Secrets - see .env.tmpl
-            SAMPLE_SECRET:          "${SAMPLE_SECRET}"
         ## Docker Swarm - https://docs.docker.com/compose/compose-file/compose-file-v3/#deploy
         ## deploy:

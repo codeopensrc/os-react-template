@@ -45,6 +45,5 @@ COPY --from=src /home/app/pub /home/app/pub
 COPY --from=src /home/app/src/html/ /home/app/pub/
 COPY --from=src /home/app/docker-compose.yml /home/app/docker-compose.yml
 ENTRYPOINT ["pm2-runtime", "server/pm2.config.js"]
-LABEL com.consul.service="react-template"
 EXPOSE 80 443
 CMD [""]
