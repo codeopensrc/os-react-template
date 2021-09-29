@@ -177,6 +177,8 @@ spec:
         secretHash: $SECRET_YAML_HASH
         commitSha: $COMMIT_SHA
     spec:
+      imagePullSecrets:
+      - name: gitlab-registry
       containers:
       - name: $APPNAME
         image: $IMAGE:$TAG

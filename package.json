@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "dependencies": {
         "consul": "^0.30.0",
-        "os-npm-util": "https://github.com/Cjones90/os.npm.util/tarball/master#0.7.5"
+        "os-npm-util": "https://github.com/codeopensrc/os-npm-util/tarball/master#0.8.1"
     },
     "devDependencies": {
         "babel-core": "^6.22.1",

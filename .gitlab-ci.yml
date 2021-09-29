@@ -5,15 +5,21 @@ stages:
   - commit
   - release
   - deploy_prod
+  - stop_prod
 
 variables:
   PROJECT_APP_IMAGE: $CI_REGISTRY_IMAGE/app
   TOKEN_REPO_WRITE_NAME: ci_push_token
   TOKEN_REPO_SELF_WRITE: "secret_value"
+  TOKEN_API_SNIPPET_WRITE: "secret_value"
   SERVICE_NAME: ${CI_PROJECT_NAME}
   SUBDOMAIN: react
   AUTH_URL: ""
-  MONGO_DB_NAME: ${MONGO_DB_NAME}
+  MONGO_DB_NAME: citmp
+  DEPLOY_SNIP_PROJECT_ID: 0
+  DEPLOY_SNIP_ID: 0
+  DEPLOY_SNIP_FILENAME: ENVS.txt
+  USE_DEPLOY_SNIP: "false"
   SAMPLE_SECRET: "secret_value"
   #KUBERNETES_SERVICE_ACCOUNT_OVERWRITE:
 
@@ -23,6 +29,11 @@ default:
 
 .docker_login: &docker_login
   docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+
+.apply_registry_secret: &apply_registry_secret
+  - kubectl create secret -n $KUBE_NAMESPACE docker-registry gitlab-registry 
+    --docker-server="$CI_REGISTRY" --docker-username="$CI_REGISTRY_USER"
+    --docker-password="$CI_REGISTRY_PASSWORD" -o yaml --dry-run=client | kubectl apply -n $KUBE_NAMESPACE -f -
 
 .not_protected: &not_protected
   '$CI_COMMIT_REF_NAME != "dev" && $CI_COMMIT_REF_NAME != "master" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
@@ -39,6 +50,17 @@ default:
 .trigger_deploy_prod_job: &trigger_deploy_prod_job
   - curl -X POST --form "variables[SKIP_BETA]=$SKIP_BETA"
     "${CI_SERVER_URL}/api/v4/projects/$CI_PROJECT_ID/trigger/pipeline?token=${CI_JOB_TOKEN}&ref=${CI_COMMIT_REF_NAME}"
+
+.get_deploy_snippet: &get_deploy_snippet
+  - curl "${CI_API_V4_URL}/projects/$DEPLOY_SNIP_PROJECT_ID/snippets/$DEPLOY_SNIP_ID/files/main/$DEPLOY_SNIP_FILENAME/raw" > $DEPLOY_SNIP_FILENAME
+
+.update_deploy_snippet: &update_deploy_snippet
+  - |
+    cat <<EOF > snippet.json
+    {"files":[{ "action": "update", "file_path": "$DEPLOY_SNIP_FILENAME","content" : "$(printf '%s\\n' $(<$DEPLOY_SNIP_FILENAME))"}]}
+    EOF
+  - 'curl -X PUT -H "PRIVATE-TOKEN: ${TOKEN_API_SNIPPET_WRITE}" -H "Content-Type: application/json" -d @snippet.json
+    "${CI_API_V4_URL}/projects/$DEPLOY_SNIP_PROJECT_ID/snippets/$DEPLOY_SNIP_ID"'
 
 .get_current_version: &get_current_version
   - DOCKER_SERVICE_NAME="main:"
@@ -84,13 +106,27 @@ workflow:
   rules:
   - if: $CI_COMMIT_TAG
     when: never
+  - if: '$ONLY_DEPLOY_PROD == "true" || $STOP_PROD == "true"'
+    variables:
+      SKIP_WEB_DEFAULT_RUN: "true"
   - when: always
 
 echo_env_vars:
   stage: build
   script:
   - echo $CI_PIPELINE_SOURCE
-  - export
+  - echo $CI_COMMIT_REF_NAME
+  - echo $CI_DEFAULT_BRANCH
+  - echo $CI_COMMIT_SHORT_SHA
+  - echo $CI_SERVER_URL
+  - echo $CI_REGISTRY_IMAGE
+  - echo $CI_PROJECT_URL
+  - echo $CI_PROJECT_NAMESPACE
+  - echo $CI_PROJECT_NAME
+  - echo $CI_PROJECT_PATH
+  - echo $CI_PROJECT_ID
+  - echo $CI_KUBERNETES_ACTIVE
+  - echo $CI_CONFIG_PATH
   rules:
   - if: $CI_PIPELINE_SOURCE != "merge_request_event"
 
@@ -119,6 +155,7 @@ deploy_review:
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
+  - *apply_registry_secret
   - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${APPNAME} -t $CI_COMMIT_SHORT_SHA -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
@@ -184,6 +221,7 @@ deploy_rc:
   - echo "$KUBE_NAMESPACE"
   - 'echo "APPNAME: ${SERVICE_NAME}"'
   - 'echo "URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
+  - *apply_registry_secret
   - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
@@ -256,6 +294,7 @@ deploy_beta:
   - echo "$KUBE_NAMESPACE"
   - 'echo "APPNAME: ${SERVICE_NAME}"'
   - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
+  - *apply_registry_secret
   - bash kube-deploy.sh -r ${CI_REGISTRY} -t ${RC}-beta -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
@@ -268,6 +307,8 @@ deploy_beta:
     kubernetes:
       namespace: beta
   rules:
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
+    when: never
   - if: '$SKIP_BETA == "true" ||  $RELEASE != null || $CI_KUBERNETES_ACTIVE != "true"'
     when: never
   - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
@@ -287,6 +328,8 @@ stop_beta:
     kubernetes:
       namespace: beta
   rules:
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
+    when: never
   - if: '$SKIP_BETA == "true" ||  $RELEASE != null || $KEEP_BETA != null || $CI_KUBERNETES_ACTIVE != "true"'
     when: never
   - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
@@ -311,6 +354,8 @@ commit_patch:
   - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH'
   - git push -o ci.skip origin HEAD:master
   rules:
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
+    when: never
   - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
     when: on_success
   - if: *is_web_master_patch
@@ -337,6 +382,8 @@ release_patch:
   - docker push $PROJECT_APP_IMAGE:latest
   - *trigger_deploy_prod_job
   rules:
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
+    when: never
   - if: *is_web_master_patch
 
 
@@ -353,13 +400,19 @@ commit_version:
   - *create_next_version
   - echo $CURVER
   - echo ${VERSION}
+  - 'curl "${CI_API_V4_URL}/projects/$CI_PROJECT_ID/merge_requests?state=merged&target_branch=$CI_DEFAULT_BRANCH" > mreq.json'
+  - curl -O $CI_SERVER_URL/os/changelogger/-/raw/master/genlog.sh
+  - bash genlog.sh $RELEASE -s $CI_SERVER_URL -p $CI_PROJECT_PATH -t $CURVER -v -m mreq.json -n $NOTES
+  - git add CHANGELOG.md 2>/dev/null || echo 0
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
   - git add docker-compose.yml
   - 'git commit -m "Release: ${VERSION}"'
   - git tag ${VERSION}
-  - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH'
+  - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/${CI_PROJECT_PATH}.git'
   - git push -o ci.skip origin HEAD:master --tags
   rules:
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
+    when: never
   - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE != null'
     when: on_success
   - if: *is_web_master_release
@@ -387,6 +440,8 @@ release_version:
   - docker push $PROJECT_APP_IMAGE:latest
   - *trigger_deploy_prod_job
   rules:
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
+    when: never
   - if: *is_web_master_release
 
 
@@ -404,9 +459,16 @@ deploy_production:
   - echo "$KUBE_NAMESPACE"
   - 'echo "APPNAME: ${SERVICE_NAME}"'
   - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
+  - *apply_registry_secret
   - bash kube-deploy.sh -r ${CI_REGISTRY} -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
+  - '[[ -z $USE_DEPLOY_SNIP || $USE_DEPLOY_SNIP != "true" ]] && exit 0'
+  - *get_deploy_snippet
+  - FOUND_ID=$(sed -n "/^$CI_PROJECT_ID$/p" $DEPLOY_SNIP_FILENAME)
+  - '[[ -n $FOUND_ID ]] && exit 0'
+  - echo "$CI_PROJECT_ID" >> $DEPLOY_SNIP_FILENAME
+  - *update_deploy_snippet
   environment:
     name: production
     url: "https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
@@ -415,11 +477,34 @@ deploy_production:
   rules:
   - if: $CI_KUBERNETES_ACTIVE != "true"
     when: never
+  - if: $ONLY_DEPLOY_PROD == "true"
+    when: always
   - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "pipeline" && $CI_COMMIT_REF_NAME == "master"'
     when: on_success
   - if: '$CI_PIPELINE_SOURCE == "pipeline" && $CI_COMMIT_REF_NAME == "master"'
     when: manual
 
+
+stop_production:
+  stage: stop_prod
+  tags:
+  - kubernetes_prod
+  variables:
+    GIT_STRATEGY: none
+  script:
+  - echo "Stop prod"
+  - kubectl delete deploy,svc,cm,secret -l "app in (${SERVICE_NAME})" || exit 0;
+  - '[[ -z $USE_DEPLOY_SNIP || $USE_DEPLOY_SNIP != "true" ]] && exit 0'
+  - *get_deploy_snippet
+  - sed -i "/^$CI_PROJECT_ID$/d" $DEPLOY_SNIP_FILENAME
+  - *update_deploy_snippet
+  environment:
+    name: production
+    action: stop
+    kubernetes:
+      namespace: production
+  rules:
+  - if: '$STOP_PROD == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"'
 
 ## TODO: Either we configure an elevated runner to delete the tmp namespace after stop/merge (if possible).
 ##  Or we run a single project namespace for the review cluster (we setup 4, review dev beta prod. 3 are not gitlab managed)
