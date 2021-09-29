@@ -12,9 +12,10 @@
 
 - Download the `docker-compose.yml` file:  
 `curl -O https://gitlab.codeopensrc.com/os/react-template/-/raw/master/docker-compose.yml`
+- Pull Image:  
+`docker-compose pull main`  
 - And run:  
-`docker-compose up main [-d]`   
-- Docker image will automatically be pulled down  
+`docker-compose up main [-d]`  
 - Project will be available at `localhost:5000` (main default)  
 
 ### Development  
