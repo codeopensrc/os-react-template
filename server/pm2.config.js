@@ -8,7 +8,7 @@ module.exports = {
         "script": "./server/server.js",
         "out_file": "./logs/server-out.log",
         "error_file": "./logs/server-err.log",
-        "log_date_format": "MMMM Do YYYY, h:mm:ss a",
+        "log_date_format": "MM-D-YY, h:mm:ss a",
         "min_uptime": 10000,
         "max_restarts": 3,
         "ignore_watch": ["server/bin", "server/output", "server/static", "server/.*"],

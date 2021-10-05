@@ -1,10 +1,8 @@
 "use strict";
 
 import React from 'react';
-import DOM from 'react-dom';
-import { api } from "os-npm-util";
 
-// require("../style/About.less")
+// import "../style/About.less"
 
 class About extends React.Component {
 
@@ -13,21 +11,7 @@ class About extends React.Component {
         this.state = {}
     }
 
-    componentDidMount() {
-
-    }
-
-    serverCall() {
-        api.get(`/test`, (res) => {
-            if(res.status) {
-                // Do something
-            }
-            else {
-                // Handle error
-            }
-        })
-    }
-
+    componentDidMount() { }
 
     render() {
 
@@ -41,4 +25,4 @@ class About extends React.Component {
 
 }
 
-module.exports = About
+export { About as default };

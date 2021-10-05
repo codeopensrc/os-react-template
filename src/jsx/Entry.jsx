@@ -1,5 +1,6 @@
 "use strict";
 
+import { hot } from 'react-hot-loader/root';
 import React from 'react';
 import DOM from 'react-dom';
 import {
@@ -11,44 +12,27 @@ import {
 
 import Home from "./Home.jsx"
 import About from "./About.jsx"
-import { Menu } from "os-npm-util";
-import { ErrorHandler } from "os-npm-util";
 
-require("../style/Entry.less")
+import "../style/Entry.less"
 
-class Entry extends React.Component {
-
-    constructor(props) {
-        super(props)
-        this.state = {}
-    }
-
-    componentDidMount() {
-        //When component successfully loads
-    }
-
-    render() {
-
-        return (
-            <Router>
-                <div id={"component-entry"}>
-                    <Menu />
-                    <ErrorHandler />
-                    <div id={"component-header"}>
-                        <Link to={"/"} className={"headerButton"}>Home</Link>
-                        <Link to={"/about"} className={"headerButton"}>About</Link>
-                    </div>
-
-                    <Switch>
-                        <Route exact path={"/"} component={Home} />
-                        <Route path={"/about"} component={About} />
-                    </Switch>
-
+const Entry = function () {
+    return (
+        <Router>
+            <div id={"component-entry"}>
+                <div id={"component-header"}>
+                    <Link to={"/"} className={"headerButton"}>Home</Link>
+                    <Link to={"/about"} className={"headerButton"}>About</Link>
                 </div>
-            </Router>
-        );
-    }
 
+                <Switch>
+                    <Route exact path={"/"} component={Home} />
+                    <Route path={"/about"} component={About} />
+                </Switch>
+
+            </div>
+        </Router>
+    );
 }
+export default hot(Entry);
 
 DOM.render(<Entry />, document.getElementById("main"))

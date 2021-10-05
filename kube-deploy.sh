@@ -1,8 +1,5 @@
 #!/bin/bash
 
-## Group level protected environments for free but project not? interesting
-## https://docs.gitlab.com/ee/ci/environments/protected_environments.html#enable-or-disable-group-level-protected-environments
-
 ## grep, echo, sed, tee, awk, git, sha256sum, kubectl  all req in image/os
 ## all available in alpine/busybox (minus kubectl)
 
@@ -119,8 +116,8 @@ data:
   CONSUL_SERVICE_NAME:  "${CONSUL_NAME}"
   CONSUL_HOST:          "${CONSUL_HOST}"
   REGISTER_SERVICE:     "${REGISTER_SERVICE}"
-  AUTH_URL:             "${AUTH_URL}"
   DEV_DATABASE_URL:     "${DEV_DATABASE_URL}"
+  ENABLE_DB:            "${USE_DB}"
 EOF
 `
 

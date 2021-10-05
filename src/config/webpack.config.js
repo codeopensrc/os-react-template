@@ -1,8 +1,6 @@
 "use strict";
 
 const path = require("path")
-
-const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 let plugins = [ new HtmlWebpackPlugin({
@@ -12,11 +10,12 @@ let plugins = [ new HtmlWebpackPlugin({
     })
 ]
 
-process.argv.indexOf("--optimize-minimize") > -1
-    ? plugins.push( new webpack.DefinePlugin({ 'process.env': { NODE_ENV: JSON.stringify('production')  } }) )
-    : ""
+let webpack_mode = process.argv.indexOf("--optimization-minimize") > -1 ? "production" : "development"
 
 module.exports = [{
+    mode: `${webpack_mode}`,
+    //target: ["node14"],
+    plugins: plugins,
     watchOptions: {
         poll: 500,
         aggregateTimeout: 400,
@@ -28,14 +27,29 @@ module.exports = [{
         path: path.resolve(__dirname, "../../pub"),
         publicPath: "",
         filename: "[name].bundle.js"
+        //assetModuleFilename: "assets/[name][ext][query]"
     },
     module: {
-        loaders: [
-            {test: /\.less/, loaders: ["style-loader", "css-loader", "less-loader"] },
-            {test: /\.jsx/, loader: "babel-loader", query: {cacheDirectory: true, presets: ["es2015", "react", "stage-0"] }},
-            {test: /\.js/, loader: "babel-loader", query: {cacheDirectory: true, presets: ["es2015", "react", "stage-0"] }}
+        //unsafeCache: true,
+        rules: [
+            {test: /\.(svg|png|jpe?g)/, type: "asset", generator: {filename: "assets/images/[name][ext][query]"}},
+            {test: /\.less/, use: ["style-loader", "css-loader", "less-loader"] },
+            {test: /\.json/, use: ["json-loader"] },
+            {test: /\.jsx/, use: {loader: "babel-loader",  options: {presets: ["@babel/preset-react"], plugins: ["react-hot-loader/babel"] }}},
+            {test: /\.js/, use: {loader: "babel-loader", options: {presets: ["@babel/preset-react"] }}},
         ]
     },
-    resolve: ["", ".less", ".js", ".jsx"],
-    plugins: plugins
+    // Runs hot reloading server when using `webpack serve`
+    devServer: {
+        host: "0.0.0.0",
+        port: "5055",
+        hot: true,
+        setupExitSignals: true,
+        proxy: { "/": 'http://localhost' },
+        // Uncomment to reload page on changes to server/
+        //watchFiles: {
+        //    paths: ["server"],
+        //    options: { ignored: ["server/bin", "server/output", "server/static", "server/.*"] }
+        //}
+    },
 }]

@@ -11,7 +11,9 @@ volumes:
 services:
     dev:
         image: react/app:dev
-        ports: ["5005:80"]
+        ports: 
+            - "5005:80"    # Vanilla watch `npm run watch`
+            - "5055:5055"  # Hot reloading server `npm run reloader`
         build:
             context: .
             target: src
@@ -26,8 +28,12 @@ services:
             DEV_DATABASE_URL: "mongodb://mongodb:27017/${MONGO_DB_NAME:-mongo}"
             LOG_EVERY_NUM_CHECKS: 5
             DEV_ENV:          "true"
-        depends_on:
-            - mongodb
+            ENABLE_DB:        "false"
+        ###! Uncomment to bring up the mongodb service
+        ###! Also set ENABLE_DB to "true" - See server/routes.js to adjust behavior
+        #depends_on:
+        #    - mongodb
+ 
     #### Dev DB service ===
     mongodb:
         image: mongo:4.4.6
@@ -52,6 +58,6 @@ services:
         environment:
             CONSUL_SERVICE_NAME:    "react"
             REGISTER_SERVICE:       "false"
-            AUTH_URL:               "${AUTH_URL}"
+            ENABLE_DB:              "false"
         ## Docker Swarm - https://docs.docker.com/compose/compose-file/compose-file-v3/#deploy
         ## deploy:

@@ -19,7 +19,7 @@ const OUTPUT_FILES = process.env.OUTPUT_FILES || "./server/output";
 const DEV_ENV = process.env.DEV_ENV === "true"
 const REGISTER_SERVICE = process.env.REGISTER_SERVICE === "true";
 const CONSUL_SERVICE_NAME = process.env.CONSUL_SERVICE_NAME || "react-template"
-const SERVE_FROM_PUB_DIR = ["404.html", "favicon.ico", "app.bundle.js", "index.html"]
+const SERVE_FROM_PUB_DIR = ["404.html", "favicon.ico", "app.bundle.js", "index.html", "assets"] 
 
 service.setConfig({
     register: REGISTER_SERVICE,
@@ -102,7 +102,7 @@ const server = {
             if(file.indexOf("wasm.gz") > 1 || file.indexOf("wasm.unityweb") > 1) { contentType = "application/wasm" }
             if(file.indexOf("js.gz") > 1 || file.indexOf("js.unityweb") > 1) { contentType = "text/javascript" }
             if(file.indexOf("data.gz") > 1 || file.indexOf("data.unityweb") > 1) { contentType = "text/javascript" }
-            SERVE_FROM_PUB_DIR.forEach((pubFile) => file.match(pubFile) && (filePath = PUB_FILES+"/"+pubFile) )
+            SERVE_FROM_PUB_DIR.forEach((pubFile) => file.match(pubFile) && (filePath = PUB_FILES+"/"+file) )
 
             let readable = fs.createReadStream(filePath, {encoding: encoding})
 

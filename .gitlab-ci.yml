@@ -156,7 +156,7 @@ deploy_review:
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - *apply_registry_secret
-  - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${APPNAME} -t $CI_COMMIT_SHORT_SHA -n $KUBE_NAMESPACE
+  - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${APPNAME} -t $CI_COMMIT_SHORT_SHA -n $KUBE_NAMESPACE -d
   - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
@@ -164,7 +164,7 @@ deploy_review:
     name: review/$CI_COMMIT_REF_NAME
     url: "http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
     on_stop: stop_review
-    auto_stop_in: 1 day
+    auto_stop_in: 1 hour
   rules:
   - if: $CI_KUBERNETES_ACTIVE != "true"
     when: never
@@ -222,7 +222,7 @@ deploy_rc:
   - 'echo "APPNAME: ${SERVICE_NAME}"'
   - 'echo "URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - *apply_registry_secret
-  - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC -n $KUBE_NAMESPACE
+  - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC -n $KUBE_NAMESPACE -d
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
@@ -230,7 +230,7 @@ deploy_rc:
     name: dev
     url: "http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
     on_stop: stop_rc
-    auto_stop_in: 1 day
+    auto_stop_in: 1 hour
     kubernetes:
       namespace: dev
   rules:
@@ -295,7 +295,7 @@ deploy_beta:
   - 'echo "APPNAME: ${SERVICE_NAME}"'
   - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - *apply_registry_secret
-  - bash kube-deploy.sh -r ${CI_REGISTRY} -t ${RC}-beta -n $KUBE_NAMESPACE
+  - bash kube-deploy.sh -r ${CI_REGISTRY} -t ${RC}-beta -n $KUBE_NAMESPACE -d
   - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
@@ -303,7 +303,7 @@ deploy_beta:
     name: beta
     url: "https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
     on_stop: stop_beta
-    auto_stop_in: 7 days
+    auto_stop_in: 1 hour
     kubernetes:
       namespace: beta
   rules:
