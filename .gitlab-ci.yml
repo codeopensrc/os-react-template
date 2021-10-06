@@ -41,7 +41,7 @@ default:
 .is_dev_branch: &is_dev_branch
   '$CI_COMMIT_REF_NAME == "dev" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
 
-.is_web_master_patch: &is_web_master_patch
+.is_web_master_stable: &is_web_master_stable
   '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
 
 .is_web_master_release: &is_web_master_release
@@ -67,21 +67,21 @@ default:
   - PROD_IMAGE=$(awk "/${DOCKER_SERVICE_NAME}/{getline; print; exit;}" docker-compose.yml)
   - CURVER=$(echo $PROD_IMAGE | cut -d ":" -f3 | cut -d "-" -f1)
 
-.exit_if_sha_matches_patch: &exit_if_sha_matches_patch
-  - LAST_CI_SHA=$(git log --oneline | grep -A 1 "Patch\|Release" | cut -d " " -f1 | awk NR==1) || echo 0 # Last Patch/Release commit
+.exit_if_sha_matches_stable: &exit_if_sha_matches_stable
+  - LAST_CI_SHA=$(git log --oneline | grep -A 1 "Stable\|Release" | cut -d " " -f1 | awk NR==1) || echo 0 # Last Stable/Release commit
   - echo $LAST_CI_SHA
   - "[[ $COMMIT_SHA = $LAST_CI_SHA ]] && exit 0"
 
 .get_sha_to_build: &get_sha_to_build
   - COMMIT_SHA=$(git log -1 --pretty=format:%h)
-  - PATCH_SHA=$(git log --oneline | grep -A 1 Patch | cut -d " " -f1 | awk NR==1) || echo 0 # Last Patch commit
+  - STABLE_SHA=$(git log --oneline | grep -A 1 Stable | cut -d " " -f1 | awk NR==1) || echo 0 # Last Stable commit
   - RELEASE_SHA=$(git log --oneline | grep -A 1 Release | cut -d " " -f1 | awk NR==1) || echo 0 # Last Release commit
-  - IMAGE_SHA=$(git log --oneline | grep -A 1 Patch | cut -d " " -f1 | awk NR==2) || echo 0 # Last docker-compose tag
-    #Use commit. If commit matches patch use last image. If commit matches release rebuild release
+  - IMAGE_SHA=$(git log --oneline | grep -A 1 Stable | cut -d " " -f1 | awk NR==2) || echo 0 # Last docker-compose tag
+    #Use commit. If commit matches stable use last image. If commit matches release rebuild release
   - SHA_TO_BUILD="-${COMMIT_SHA}"
-  - '[[ $COMMIT_SHA = $PATCH_SHA ]] && SHA_TO_BUILD="-$IMAGE_SHA"'
+  - '[[ $COMMIT_SHA = $STABLE_SHA ]] && SHA_TO_BUILD="-$IMAGE_SHA"'
   - '[[ $COMMIT_SHA = $RELEASE_SHA ]] && SHA_TO_BUILD=""'
-  - echo $COMMIT_SHA $IMAGE_SHA $PATCH_SHA $RELEASE_SHA
+  - echo $COMMIT_SHA $IMAGE_SHA $STABLE_SHA $RELEASE_SHA
 
 .create_rc: &create_rc
   - *get_current_version
@@ -338,7 +338,7 @@ stop_beta:
 ###############################
 ###   Not Tag Commit  -  $RELEASE is not defined
 ###############################
-commit_patch:
+commit_stable:
   stage: commit
   tags:
   - prod
@@ -347,10 +347,10 @@ commit_patch:
   - echo $CURVER
   - COMMIT_SHA=$(git log -1 --pretty=format:%h)
   - echo $COMMIT_SHA
-  - *exit_if_sha_matches_patch
+  - *exit_if_sha_matches_stable
   - sed -i "s|${CURVER}-*.*|${CURVER}-${COMMIT_SHA}|" docker-compose.yml
   - git add docker-compose.yml
-  - 'git commit -m "Patch: ${CURVER}-${COMMIT_SHA}"'
+  - 'git commit -m "Stable: ${CURVER}-${COMMIT_SHA}"'
   - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH'
   - git push -o ci.skip origin HEAD:master
   rules:
@@ -358,10 +358,10 @@ commit_patch:
     when: never
   - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
     when: on_success
-  - if: *is_web_master_patch
+  - if: *is_web_master_stable
     when: manual
 
-release_patch:
+release_stable:
   stage: release
   tags:
   - prod
@@ -378,13 +378,15 @@ release_patch:
   - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev --cache-from $PROJECT_APP_IMAGE:${RC}-beta \
     --target prod -t $PROJECT_APP_IMAGE:${CURVER}${SHA_TO_BUILD} ."
   - docker tag $PROJECT_APP_IMAGE:${CURVER}${SHA_TO_BUILD} $PROJECT_APP_IMAGE:latest
+  - docker tag $PROJECT_APP_IMAGE:${CURVER}${SHA_TO_BUILD} $PROJECT_APP_IMAGE:${CURVER}-stable
   - docker push $PROJECT_APP_IMAGE:${CURVER}${SHA_TO_BUILD}
+  - docker push $PROJECT_APP_IMAGE:${CURVER}-stable
   - docker push $PROJECT_APP_IMAGE:latest
   - *trigger_deploy_prod_job
   rules:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
     when: never
-  - if: *is_web_master_patch
+  - if: *is_web_master_stable
 
 
 
@@ -425,16 +427,17 @@ release_version:
   script:
   - *docker_login
   - echo $RELEASE
+  - *create_rc
   - *create_next_version
   - echo $CURVER
+  - echo $RC
   - echo ${VERSION}
-    ### NOTE: With this method we ALWAYS need a patch on master before a release
-  - IMAGE_SHA=$(git log --oneline | grep -A 1 Patch | cut -d " " -f1 | awk NR==2) # Commit before Patch commit
   - docker pull $PROJECT_APP_IMAGE:dev
-  - docker pull $PROJECT_APP_IMAGE:${CURVER}-${IMAGE_SHA}
+  - docker pull $PROJECT_APP_IMAGE:${RC}-beta
+  - docker pull $PROJECT_APP_IMAGE:${CURVER}-stable || echo 0
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
-  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev \
-    --cache-from $PROJECT_APP_IMAGE:${CURVER}-${IMAGE_SHA} --target prod -t $PROJECT_APP_IMAGE:$VERSION ."
+  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev --cache-from $PROJECT_APP_IMAGE:${RC}-beta \
+    --cache-from $PROJECT_APP_IMAGE:${CURVER}-stable --target prod -t $PROJECT_APP_IMAGE:$VERSION ."
   - docker tag $PROJECT_APP_IMAGE:$VERSION $PROJECT_APP_IMAGE:latest
   - docker push $PROJECT_APP_IMAGE:$VERSION
   - docker push $PROJECT_APP_IMAGE:latest
