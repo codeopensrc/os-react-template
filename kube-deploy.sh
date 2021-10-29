@@ -53,7 +53,6 @@ REGISTER_SERVICE="false"
 
 CI_ENVIRONMENT_SLUG=${CI_ENVIRONMENT_SLUG:-"dev"}
 CI_PROJECT_PATH_SLUG=${CI_PROJECT_PATH_SLUG:-$APPNAME}
-DB_NAME=${MONGO_DB_NAME:-mongo}
 
 echo "APPNAME: $APPNAME"
 echo "IMAGE: $IMAGE"
@@ -66,6 +65,8 @@ if [[ -f .env ]]; then
 else
     echo "No .env found, some variables may not be available in deployment.";
 fi
+
+DB_NAME=${MONGO_DB_NAME:-mongo}
 
 if [[ -n $USE_DB && $NAMESPACE != "production" ]]; then
     DEV_DB_IMAGE=$(awk "/${DEV_DB_SERVICE_NAME}$/{getline; print; exit;}" docker-compose.yml)
@@ -91,7 +92,7 @@ fi
 
 ## Create kubernetes secret for app and create a hash
 ## Hash is used to force a redeploy on secret change
-SECRET_YAML_HASH=`<<EOF tee >(kubectl apply -f - >/dev/null) | sha256sum
+SECRET_YAML=$(cat <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -103,9 +104,11 @@ stringData:
   MONGO_DB_NAME: "${DB_NAME}"
   SAMPLE_SECRET: "${SAMPLE_SECRET}"
 EOF
-`
+)
+echo "$SECRET_YAML" | kubectl apply -f -
+SECRET_YAML_HASH=$(echo "$SECRET_YAML" | sha256sum)
 
-CONFIG_YAML_HASH=`<<EOF tee >(kubectl apply -f - >/dev/null) | sha256sum
+CONFIG_YAML=$(cat <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -119,11 +122,13 @@ data:
   DEV_DATABASE_URL:     "${DEV_DATABASE_URL}"
   ENABLE_DB:            "${USE_DB}"
 EOF
-`
+)
+echo "$CONFIG_YAML" | kubectl apply -f -
+CONFIG_YAML_HASH=$(echo "$CONFIG_YAML" | sha256sum)
 
 ## Create a kubernetes service
 ## Create a kubernetes deployment
-OUTPUT=`kubectl apply -f - <<EOF
+OUTPUT=$(kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Service
 metadata:
@@ -205,7 +210,7 @@ spec:
           initialDelaySeconds: 5
 
 EOF
-`
+)
 
 echo "$OUTPUT"
 
@@ -223,7 +228,7 @@ if [[ -n $USE_DB && $NAMESPACE != "production" ]]; then
 
 	APPNAME=$DB_APPNAME
 
-	CONFIG_YAML_HASH=`<<-EOF tee >(kubectl apply -f - >/dev/null) | sha256sum
+	CONFIG_YAML=$(cat <<-EOF
 	apiVersion: v1
 	kind: ConfigMap
 	metadata:
@@ -233,7 +238,9 @@ if [[ -n $USE_DB && $NAMESPACE != "production" ]]; then
 	data:
 	  MONGO_INITDB_DATABASE: "${DB_NAME}"
 	EOF
-	`
+	)
+	echo "$CONFIG_YAML" | kubectl apply -f -
+	CONFIG_YAML_HASH=$(echo "$CONFIG_YAML" | sha256sum)
 
 	kubectl apply -f - <<-EOF
 	apiVersion: v1

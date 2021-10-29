@@ -11,7 +11,8 @@
 **[Docker Compose](https://docs.docker.com/compose/install)**
 
 - Download the `docker-compose.yml` file:  
-`curl -O https://gitlab.codeopensrc.com/os/react-template/-/raw/master/docker-compose.yml`
+`curl -O https://gitlab.codeopensrc.com/os/react-template/-/raw/master/docker-compose.yml`  
+`touch .env.tmpl`  
 - Pull Image:  
 `docker-compose pull main`  
 - And run:  
