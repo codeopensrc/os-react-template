@@ -33,10 +33,13 @@ module.exports = {
         if(!DEV_DB_URL) {
             consul.catalog.service.nodes("mongo", (err, res) => {
                 if (err) { console.log("ERR - db.js", err); }
-                let host = res && res[0] ? res[0].Address : ""
-                let port = res && res[0] ? res[0].ServicePort : ""
-                let connectionString = `mongodb://${host}:${port}/${MONGO_DB_NAME}`
-                if(!host) {
+                let addrStr = "";
+                res && res.length > 0 && res.forEach((node, i) =>
+                    addrStr += `${node.Address}:${node.ServicePort}${i<res.length-1?",":""}`
+                )
+                let replOpts = res && res.length > 1 ? "?readPreference=primaryPreferred" : ""
+                let connectionString = `mongodb://${addrStr}/${MONGO_DB_NAME}${replOpts}`
+                if(!addrStr) {
                     console.log("No Mongo Host found for DB.js");
                     setTimeout(this.init.bind(this), CONSUL_RETRY_INTERVAL * ++connectionAttempts);
                     return console.log(`Search consul cluster again in ${CONSUL_RETRY_INTERVAL * connectionAttempts}ms`);
@@ -82,12 +85,12 @@ module.exports = {
 
     resWithErr: function(err, db, res) {
         console.error(err);
-        res.writeHead(200, {'Access-Control-Allow-Origin' : '*'} );
+        res.writeHead(500, {'Access-Control-Allow-Origin' : '*'} );
         res.end(JSON.stringify({status: "Error"}));
     },
 
     resWithNoAccess: function (res) {
-        res.writeHead(200, {'Access-Control-Allow-Origin' : '*'} );
+        res.writeHead(403, {'Access-Control-Allow-Origin' : '*'} );
         res.end(JSON.stringify({authorized: false}));
     },
 
