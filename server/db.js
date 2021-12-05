@@ -34,9 +34,10 @@ module.exports = {
             consul.catalog.service.nodes("mongo", (err, res) => {
                 if (err) { console.log("ERR - db.js", err); }
                 let addrStr = "";
-                res && res.length > 0 && res.forEach((node, i) =>
-                    addrStr += `${node.Address}:${node.ServicePort}${i<res.length-1?",":""}`
-                )
+                res && res.length > 0 && res.forEach((node, i) => {
+                    let address = node.ServiceAddress != "" ? node.ServiceAddress : node.Address
+                    addrStr += `${address}:${node.ServicePort}${i<res.length-1?",":""}`
+                })
                 let replOpts = res && res.length > 1 ? "?readPreference=primaryPreferred" : ""
                 let connectionString = `mongodb://${addrStr}/${MONGO_DB_NAME}${replOpts}`
                 if(!addrStr) {
