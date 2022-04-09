@@ -102,6 +102,27 @@ default:
   - "[[ $RELEASE == 'minor' ]] && VERSION=${MAJOR}.${NEXT_MINOR}.0"
   - "[[ $RELEASE == 'patch' ]] && VERSION=${MAJOR}.${MINOR}.${NEXT_PATCH}"
 
+.create_helm_values: &create_helm_values
+  - |
+    REGISTER_SERVICE="false"
+    ENABLE_DB="true"
+    [[ $KUBE_NAMESPACE = "production" ]] && REGISTER_SERVICE="true"
+    [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_DB="false"
+    cat <<EOF > helm_ci_values.yaml
+	ciLabels:
+	  app: "${APPNAME}"
+	  env: "${CI_ENVIRONMENT_SLUG}"
+	ciAnnotations:
+	  app.gitlab.com/app: "${CI_PROJECT_PATH_SLUG}"
+	  app.gitlab.com/env: "${CI_ENVIRONMENT_SLUG}"
+	secretStringData:
+	  MONGO_DB_NAME: "${MONGO_DB_NAME}"
+	  SAMPLE_SECRET: "${SAMPLE_SECRET}"
+	configMapData:
+	  REGISTER_SERVICE:     "${REGISTER_SERVICE}"
+	  ENABLE_DB:            "${ENABLE_DB}"
+    EOF
+
 workflow:
   rules:
   - if: $CI_COMMIT_TAG

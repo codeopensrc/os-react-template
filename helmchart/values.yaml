@@ -80,3 +80,39 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+
+
+### Custom additions
+
+##! Made a one-liner to substitute env values from .env into a helm values.yaml
+##! Helm doesnt support env values in helm charts and felt like bad practice but it works
+##!  (export $(sed "/^\$\|^#/d" .env | xargs); envsubst < helmchart/values.yaml)
+
+secretStringData:
+  MONGO_DB_NAME: "react"
+  SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
+
+configMapData:
+  CONSUL_SERVICE_NAME:  "react"
+  CONSUL_HOST:          "172.17.0.1"
+  REGISTER_SERVICE:     "false"
+  DEV_DATABASE_URL:     "mongodb://mongodb-tmpdb:27017/react"
+  ENABLE_DB:            "false"
+
+createExtraSecrets: []
+#  - name: extraSecret1
+#    stringData:
+#      SECRETK1: secret_val1
+attachExtraSecrets: []
+#- extraSecret1
+
+createExtraConfigMaps: []
+#  - name: extraCM1
+#    data:
+#      ENVK1: env_val1
+attachExtraConfigMaps: []
+#  - extraCM1
+
+ciLabels: {}
+ciAnnotations: {}

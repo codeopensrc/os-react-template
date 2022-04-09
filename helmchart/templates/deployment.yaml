@@ -33,6 +33,25 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if or .Values.secretStringData .Values.configMapData .Values.attachExtraSecrets .Values.attachExtraConfigMaps }}
+          envFrom:
+            {{- if .Values.secretStringData }}
+            - secretRef:
+                name: {{ include "react-template.fullname" . }}
+            {{- end }}
+            {{- range .Values.attachExtraSecrets }}
+            - secretRef:
+                name: {{ . }}
+            {{- end }}
+            {{- if .Values.configMapData }}
+            - configMapRef:
+                name: {{ include "react-template.fullname" . }}
+            {{- end }}
+            {{- range .Values.attachExtraConfigMaps }}
+            - configMapRef:
+                name: {{ . }}
+            {{- end }}
+          {{- end}}
           ports:
             - name: http
               containerPort: 80

@@ -1,0 +1,29 @@
+{{- if .Values.configMapData }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "react-template.fullname" . }}
+  labels:
+    {{- include "react-template.labels" . | nindent 4 }}
+    {{- if .Values.appLabel }}
+    app: {{ .Values.appLabel }}
+    {{- end }}
+data:
+  {{- toYaml .Values.configMapData | nindent 2 }}
+---
+{{- end }}
+
+{{- range .Values.createExtraConfigMaps }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "react-template.labels" $ | nindent 4 }}
+    {{- if $.Values.appLabel }}
+    app: {{ $.Values.appLabel }}
+    {{- end }}
+data:
+  {{- toYaml .data | nindent 2 }}
+---
+{{- end }}
