@@ -1,0 +1,14 @@
+{{- range .Values.createExtraConfigMaps }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "react-template.labels" $ | nindent 4 }}
+    {{- with $.Values.ciLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+data:
+  {{- toYaml .data | nindent 2 }}
+---
+{{- end }}

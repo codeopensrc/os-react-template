@@ -2,7 +2,7 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 1
+replicaCount: 2
 
 image:
   repository: registry.codeopensrc.com/os/react-template/app
@@ -50,7 +50,7 @@ ingress:
     - host: chart-example.local
       paths:
         - path: /
-          pathType: ImplementationSpecific
+          pathType: Prefix
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -89,6 +89,13 @@ affinity: {}
 ##! Helm doesnt support env values in helm charts and felt like bad practice but it works
 ##!  (export $(sed "/^\$\|^#/d" .env | xargs); envsubst < helmchart/values.yaml)
 
+containerPort: 80
+containerProbe:
+  path: /healthcheck
+  httpHeaders:
+    - name: Host
+      value: localhost
+
 secretStringData:
   MONGO_DB_NAME: "react"
   SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
@@ -104,13 +111,17 @@ createExtraSecrets: []
 #  - name: extraSecret1
 #    stringData:
 #      SECRETK1: secret_val1
-attachExtraSecrets: []
-#- extraSecret1
 
 createExtraConfigMaps: []
 #  - name: extraCM1
 #    data:
 #      ENVK1: env_val1
+
+##! attach* hash annotations wont output(correctly) in `helm template` due to the lookup function
+##! lookup() is used to update deployments when cms/secrets change that are attached but not created by helm
+##! https://helm.sh/docs/chart_template_guide/functions_and_pipelines/#using-the-lookup-function
+attachExtraSecrets:
+#  - extraSecret1
 attachExtraConfigMaps: []
 #  - extraCM1
 

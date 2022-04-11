@@ -109,6 +109,8 @@ default:
     [[ $KUBE_NAMESPACE = "production" ]] && REGISTER_SERVICE="true"
     [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_DB="false"
     cat <<EOF > helm_ci_values.yaml
+	image:
+	  repository: "${PROJECT_APP_IMAGE}"
 	ciLabels:
 	  app: "${APPNAME}"
 	  env: "${CI_ENVIRONMENT_SLUG}"

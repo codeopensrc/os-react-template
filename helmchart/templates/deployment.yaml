@@ -4,21 +4,67 @@ metadata:
   name: {{ include "react-template.fullname" . }}
   labels:
     {{- include "react-template.labels" . | nindent 4 }}
+    {{- with .Values.ciLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if or .Values.ciAnnotations .Values.configMapData .Values.secretStringData .Values.attachExtraConfigMaps .Values.attachExtraSecrets }}
+  annotations:
+    {{- if .Values.configMapData }}
+    configHash: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    {{- end }}
+    {{- range .Values.attachExtraConfigMaps }}
+    {{ . }}Hash: {{ (default "" (lookup "v1" "ConfigMap" $.Release.Namespace .).data) | sha256sum }}
+    {{- end }}
+    {{- if .Values.secretStringData }}
+    secretHash: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    {{- end }}
+    {{- range .Values.attachExtraSecrets }}
+    {{ . }}Hash: {{ (default "" (lookup "v1" "Secret" $.Release.Namespace .).stringData) | sha256sum }}
+    {{- end }}
+    {{- with .Values.ciAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
   selector:
     matchLabels:
       {{- include "react-template.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       labels:
         {{- include "react-template.selectorLabels" . | nindent 8 }}
+        {{- with .Values.ciLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.ciAnnotations .Values.podAnnotations .Values.configMapData .Values.secretStringData .Values.attachExtraConfigMaps .Values.attachExtraSecrets }}
+      annotations:
+        {{- if .Values.configMapData }}
+        configHash: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- range .Values.attachExtraConfigMaps }}
+        {{ . }}Hash: {{ (default "" (lookup "v1" "ConfigMap" $.Release.Namespace .).data) | sha256sum }}
+        {{- end }}
+        {{- if .Values.secretStringData }}
+        secretHash: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- range .Values.attachExtraSecrets }}
+        {{ . }}Hash: {{ (default "" (lookup "v1" "Secret" $.Release.Namespace .).stringData) | sha256sum }}
+        {{- end }}
+        {{- with .Values.ciAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -27,12 +73,49 @@ spec:
       serviceAccountName: {{ include "react-template.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                {{- $selectorLabelList := regexSplit "\n" (include "react-template.selectorLabels" .) -1 }}
+                {{- range $ind, $label := $selectorLabelList }}
+                - key: {{ regexSplit ":" $label -1 | first | trim }}
+                  operator: In
+                  values:
+                  - {{ regexSplit ":" $label -1 | last | trim }}
+                {{- end }}
+              topologyKey: "kubernetes.io/hostname"
+            weight: 100
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ include "react-template.fullname" . }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: {{ default "/" .Values.containerProbe.path }}
+              port: http
+              {{- with .Values.containerProbe.httpHeaders }}
+              httpHeaders:
+              {{- toYaml . | nindent 16 }}
+              {{- end }}
+            failureThreshold: 50
+          readinessProbe:
+            httpGet:
+              path: {{ default "/" .Values.containerProbe.path }}
+              port: http
+              {{- with .Values.containerProbe.httpHeaders }}
+              httpHeaders:
+              {{- toYaml . | nindent 16 }}
+              {{- end }}
+            initialDelaySeconds: 5
           {{- if or .Values.secretStringData .Values.configMapData .Values.attachExtraSecrets .Values.attachExtraConfigMaps }}
           envFrom:
             {{- if .Values.secretStringData }}
@@ -52,18 +135,6 @@ spec:
                 name: {{ . }}
             {{- end }}
           {{- end}}
-          ports:
-            - name: http
-              containerPort: 80
-              protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /
-              port: http
-          readinessProbe:
-            httpGet:
-              path: /
-              port: http
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
