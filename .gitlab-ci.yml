@@ -109,20 +109,21 @@ default:
     [[ $KUBE_NAMESPACE = "production" ]] && REGISTER_SERVICE="true"
     [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_DB="false"
     cat <<EOF > helm_ci_values.yaml
-	image:
-	  repository: "${PROJECT_APP_IMAGE}"
-	ciLabels:
-	  app: "${APPNAME}"
-	  env: "${CI_ENVIRONMENT_SLUG}"
-	ciAnnotations:
-	  app.gitlab.com/app: "${CI_PROJECT_PATH_SLUG}"
-	  app.gitlab.com/env: "${CI_ENVIRONMENT_SLUG}"
-	secretStringData:
-	  MONGO_DB_NAME: "${MONGO_DB_NAME}"
-	  SAMPLE_SECRET: "${SAMPLE_SECRET}"
-	configMapData:
-	  REGISTER_SERVICE:     "${REGISTER_SERVICE}"
-	  ENABLE_DB:            "${ENABLE_DB}"
+    image:
+      repository: "${PROJECT_APP_IMAGE}"
+      #tag:    ## Unsure if we should update this or chart appVersion in ci atm
+    ciLabels:
+      app: "${APPNAME}"
+      env: "${CI_ENVIRONMENT_SLUG}"
+    ciAnnotations:
+      app.gitlab.com/app: "${CI_PROJECT_PATH_SLUG}"
+      app.gitlab.com/env: "${CI_ENVIRONMENT_SLUG}"
+    secretStringData:
+      MONGO_DB_NAME: "${MONGO_DB_NAME}"
+      SAMPLE_SECRET: "${SAMPLE_SECRET}"
+    configMapData:
+      REGISTER_SERVICE:     "${REGISTER_SERVICE}"
+      ENABLE_DB:            "${ENABLE_DB}"
     EOF
 
 workflow:
