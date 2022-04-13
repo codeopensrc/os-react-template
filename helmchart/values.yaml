@@ -118,9 +118,9 @@ createExtraConfigMaps: []
 #      ENVK1: env_val1
 
 ##! attach* hash annotations wont output(correctly) in `helm template` due to the lookup function
-##! lookup() is used to update deployments when cms/secrets change that are attached but not created by helm
+##! using lookup() updates hashs for when any attached (but not created) cms/secrets change
 ##! https://helm.sh/docs/chart_template_guide/functions_and_pipelines/#using-the-lookup-function
-attachExtraSecrets:
+attachExtraSecrets: []
 #  - extraSecret1
 attachExtraConfigMaps: []
 #  - extraCM1
