@@ -105,13 +105,13 @@ default:
 .create_helm_values: &create_helm_values
   - |
     REGISTER_SERVICE="false"
-    ENABLE_DB="true"
+    ENABLE_DB="false"
     [[ $KUBE_NAMESPACE = "production" ]] && REGISTER_SERVICE="true"
     [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_DB="false"
     cat <<EOF > helm_ci_values.yaml
     image:
       repository: "${PROJECT_APP_IMAGE}"
-      #tag:    ## Unsure if we should update this or chart appVersion in ci atm
+      tag: "${HELM_IMAGE_TAG}"
     ciLabels:
       app: "${APPNAME}"
       env: "${CI_ENVIRONMENT_SLUG}"
@@ -125,6 +125,12 @@ default:
       REGISTER_SERVICE:     "${REGISTER_SERVICE}"
       ENABLE_DB:            "${ENABLE_DB}"
     EOF
+
+.deploy_helm_chart: &deploy_helm_chart
+  - helm upgrade --install $APPNAME helmchart -f helm_ci_values.yaml -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
+  - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
+  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
 
 workflow:
   rules:
@@ -177,13 +183,12 @@ deploy_review:
   script:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
+  - HELM_IMAGE_TAG=${CI_COMMIT_SHORT_SHA}
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - *apply_registry_secret
-  - bash kube-deploy.sh -i ${PROJECT_APP_IMAGE} -a ${APPNAME} -t $CI_COMMIT_SHORT_SHA -n $KUBE_NAMESPACE -d
-  - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
-  - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
-  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
+  - *create_helm_values
+  - *deploy_helm_chart
   environment:
     name: review/$CI_COMMIT_REF_NAME
     url: "http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
@@ -204,7 +209,7 @@ stop_review:
   - echo "Stop commit"
   - echo ${KUBE_NAMESPACE}
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
-  - kubectl delete deploy,svc,cm,secret -l "app in (${APPNAME}, ${APPNAME}-tmpdb)" || exit 0;
+  - helm uninstall $APPNAME -n $KUBE_NAMESPACE
   environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
@@ -243,13 +248,13 @@ deploy_rc:
   script:
   - *create_rc
   - echo "$KUBE_NAMESPACE"
-  - 'echo "APPNAME: ${SERVICE_NAME}"'
+  - APPNAME=${SERVICE_NAME}
+  - HELM_IMAGE_TAG=${RC}
+  - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - *apply_registry_secret
-  - bash kube-deploy.sh -r ${CI_REGISTRY} -t $RC -n $KUBE_NAMESPACE -d
-  - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
-  - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
-  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
+  - *create_helm_values
+  - *deploy_helm_chart
   environment:
     name: dev
     url: "http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
@@ -270,7 +275,8 @@ stop_rc:
     GIT_STRATEGY: none
   script:
   - echo "Stop rc"
-  - kubectl delete deploy,svc,cm,secret -l "app in (${SERVICE_NAME}, ${SERVICE_NAME}-tmpdb)" || exit 0;
+  - APPNAME=${SERVICE_NAME}
+  - helm uninstall $APPNAME -n $KUBE_NAMESPACE
   environment:
     name: dev
     action: stop
@@ -316,13 +322,13 @@ deploy_beta:
   script:
   - *create_rc
   - echo "$KUBE_NAMESPACE"
-  - 'echo "APPNAME: ${SERVICE_NAME}"'
+  - APPNAME=${SERVICE_NAME}
+  - HELM_IMAGE_TAG=${RC}-beta
+  - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - *apply_registry_secret
-  - bash kube-deploy.sh -r ${CI_REGISTRY} -t ${RC}-beta -n $KUBE_NAMESPACE -d
-  - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
-  - kubectl rollout status -w "deployment/${SERVICE_NAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
-  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
+  - *create_helm_values
+  - *deploy_helm_chart
   environment:
     name: beta
     url: "https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
@@ -345,7 +351,8 @@ stop_beta:
     GIT_STRATEGY: none
   script:
   - echo "Stop beta"
-  - kubectl delete deploy,svc,cm,secret -l "app in (${SERVICE_NAME}, ${SERVICE_NAME}-tmpdb)" || exit 0;
+  - APPNAME=${SERVICE_NAME}
+  - helm uninstall $APPNAME -n $KUBE_NAMESPACE
   environment:
     name: beta
     action: stop
