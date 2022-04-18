@@ -127,7 +127,9 @@ default:
     EOF
 
 .deploy_helm_chart: &deploy_helm_chart
-  - helm upgrade --install $APPNAME helmchart -f helm_ci_values.yaml -n $KUBE_NAMESPACE
+  - 'sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" helmchart/Chart.yaml'
+  - helm upgrade $APPNAME helmchart --install -f helm_ci_values.yaml -n $KUBE_NAMESPACE
+  - helm history $APPNAME
   - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
@@ -209,7 +211,7 @@ stop_review:
   - echo "Stop commit"
   - echo ${KUBE_NAMESPACE}
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
-  - helm uninstall $APPNAME -n $KUBE_NAMESPACE
+  - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
   environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
@@ -276,7 +278,7 @@ stop_rc:
   script:
   - echo "Stop rc"
   - APPNAME=${SERVICE_NAME}
-  - helm uninstall $APPNAME -n $KUBE_NAMESPACE
+  - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
   environment:
     name: dev
     action: stop
@@ -352,7 +354,7 @@ stop_beta:
   script:
   - echo "Stop beta"
   - APPNAME=${SERVICE_NAME}
-  - helm uninstall $APPNAME -n $KUBE_NAMESPACE
+  - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
   environment:
     name: beta
     action: stop
@@ -380,7 +382,8 @@ commit_stable:
   - echo $COMMIT_SHA
   - *exit_if_sha_matches_stable
   - sed -i "s|${CURVER}-*.*|${CURVER}-${COMMIT_SHA}|" docker-compose.yml
-  - git add docker-compose.yml
+  - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${CURVER}-${COMMIT_SHA}\"|" helmchart/Chart.yaml'
+  - git add docker-compose.yml helmchart/Chart.yaml
   - 'git commit -m "Stable: ${CURVER}-${COMMIT_SHA}"'
   - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH'
   - git push -o ci.skip origin HEAD:master
@@ -438,7 +441,8 @@ commit_version:
   - bash genlog.sh $RELEASE -s $CI_SERVER_URL -p $CI_PROJECT_PATH -t $CURVER -v -m mreq.json -n $NOTES
   - git add CHANGELOG.md 2>/dev/null || echo 0
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
-  - git add docker-compose.yml
+  - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${VERSION}\"|" helmchart/Chart.yaml'
+  - git add docker-compose.yml helmchart/Chart.yaml
   - 'git commit -m "Release: ${VERSION}"'
   - git tag ${VERSION}
   - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/${CI_PROJECT_PATH}.git'
@@ -491,12 +495,13 @@ deploy_production:
   - kubernetes_prod
   script:
   - echo "$KUBE_NAMESPACE"
-  - 'echo "APPNAME: ${SERVICE_NAME}"'
+  - APPNAME=${SERVICE_NAME}
+  - HELM_IMAGE_TAG=""
+  - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
   - *apply_registry_secret
-  - bash kube-deploy.sh -r ${CI_REGISTRY} -n $KUBE_NAMESPACE
-  - kubectl rollout status -w "deployment/${SERVICE_NAME}" -n $KUBE_NAMESPACE
-  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
+  - *create_helm_values
+  - *deploy_helm_chart
   - '[[ -z $USE_DEPLOY_SNIP || $USE_DEPLOY_SNIP != "true" ]] && exit 0'
   - *get_deploy_snippet
   - FOUND_ID=$(sed -n "/^$CI_PROJECT_ID$/p" $DEPLOY_SNIP_FILENAME)
@@ -527,7 +532,8 @@ stop_production:
     GIT_STRATEGY: none
   script:
   - echo "Stop prod"
-  - kubectl delete deploy,svc,cm,secret -l "app in (${SERVICE_NAME})" || exit 0;
+  - APPNAME=${SERVICE_NAME}
+  - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
   - '[[ -z $USE_DEPLOY_SNIP || $USE_DEPLOY_SNIP != "true" ]] && exit 0'
   - *get_deploy_snippet
   - sed -i "/^$CI_PROJECT_ID$/d" $DEPLOY_SNIP_FILENAME
