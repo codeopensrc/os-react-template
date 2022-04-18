@@ -127,7 +127,7 @@ default:
     EOF
 
 .deploy_helm_chart: &deploy_helm_chart
-  - 'sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" helmchart/Chart.yaml'
+  - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" helmchart/Chart.yaml'
   - helm upgrade $APPNAME helmchart --install -f helm_ci_values.yaml -n $KUBE_NAMESPACE
   - helm history $APPNAME
   - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
