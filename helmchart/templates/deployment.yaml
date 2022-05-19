@@ -95,9 +95,11 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: http
-              containerPort: {{ .Values.containerPort }}
+            {{- range .Values.containerPorts }}
+            - name: {{ .name }}
+              containerPort: {{ .port }}
               protocol: TCP
+            {{- end }}
           livenessProbe:
             httpGet:
               path: {{ default "/" .Values.containerProbe.path }}

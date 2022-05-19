@@ -38,7 +38,11 @@ securityContext: {}
 
 service:
   type: ClusterIP
-  port: 80
+  ports:
+    - servicePort: 80
+      targetContainerPortName: http
+    - servicePort: 5055
+      targetContainerPortName: reloader
 
 ingress:
   enabled: false
@@ -89,7 +93,11 @@ affinity: {}
 ##! Helm doesnt support env values in helm charts and felt like bad practice but it works
 ##!  (export $(sed "/^\$\|^#/d" .env | xargs); envsubst < helmchart/values.yaml)
 
-containerPort: 80
+containerPorts: 
+  - name: http
+    port: 80
+  - name: reloader
+    port: 5055
 containerProbe:
   path: /healthcheck
   httpHeaders:

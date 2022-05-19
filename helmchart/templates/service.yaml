@@ -14,9 +14,11 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
+    {{- range .Values.service.ports }}
+    - port: {{ .servicePort }}
+      targetPort: {{ .targetContainerPortName }}
       protocol: TCP
-      name: http
+      name: {{ .targetContainerPortName }}
+    {{- end }}
   selector:
     {{- include "react-template.selectorLabels" . | nindent 4 }}

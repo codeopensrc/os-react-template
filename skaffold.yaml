@@ -1,0 +1,33 @@
+apiVersion: skaffold/v2beta28
+kind: Config
+metadata:
+  name: react-template
+build:
+  artifacts:
+    - image: registry.codeopensrc.com/os/react-template/app
+      context: .
+      docker:
+        target: src
+      sync:
+        manual:
+          - src: "src/**"
+            dest: /home/app
+          - src: "server/**"
+            dest: /home/app/server
+          - src: "docker-compose.yml"
+            dest: /home/app
+deploy:
+  helm:
+    releases:
+    - name: react
+      namespace: react
+      createNamespace: true
+      chartPath: helmchart
+      artifactOverrides:
+        image: registry.codeopensrc.com/os/react-template/app
+      overrides:
+        replicaCount: 1
+        image:
+          pullPolicy: IfNotPresent
+      imageStrategy:
+        helm: {}

@@ -9,9 +9,9 @@ npm-debug.log
 node_modules/
 Dockerfile
 
-*.vim
-*.swp
-*.md
+**/*.vim
+**/*.swp
+**/*.md
 
 logs
 dumps
