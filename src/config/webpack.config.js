@@ -2,6 +2,7 @@
 
 const path = require("path")
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const LIVE_RELOADER_PORT = process.env.LIVE_RELOADER_PORT || 5055
 
 let plugins = [ new HtmlWebpackPlugin({
         template: "./src/html/template.html",
@@ -42,7 +43,7 @@ module.exports = [{
     // Runs hot reloading server when using `webpack serve`
     devServer: {
         host: "0.0.0.0",
-        port: "5055",
+        port: LIVE_RELOADER_PORT,
         hot: true,
         setupExitSignals: true,
         proxy: { "/": 'http://localhost' },

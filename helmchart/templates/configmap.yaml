@@ -9,5 +9,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
     {{- end }}
 data:
-  {{- toYaml .Values.configMapData | nindent 2 }}
+  {{- range $k, $v := .Values.configMapData }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
 {{- end }}

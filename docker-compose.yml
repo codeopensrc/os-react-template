@@ -29,6 +29,7 @@ services:
             LOG_EVERY_NUM_CHECKS: 5
             DEV_ENV:          "true"
             ENABLE_DB:        "false"
+            LIVE_RELOADER_PORT: 5055
         ###! Uncomment to bring up the mongodb service
         ###! Also set ENABLE_DB to "true" - See server/routes.js to adjust behavior
         #depends_on:
