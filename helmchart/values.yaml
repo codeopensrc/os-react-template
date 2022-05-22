@@ -41,8 +41,6 @@ service:
   ports:
     - servicePort: 80
       targetContainerPortName: http
-    - servicePort: 5055
-      targetContainerPortName: reloader
 
 ingress:
   enabled: false
@@ -96,42 +94,63 @@ affinity: {}
 containerPorts: 
   - name: http
     port: 80
-  - name: reloader
-    port: 5055
 containerProbe:
   path: /healthcheck
   httpHeaders:
     - name: Host
       value: localhost
 
+## Can pass in .env using `--set-file dotEnvFile=.env`
+dotEnvFile: ""
+
 secretStringData:
-  MONGO_DB_NAME: "mongo"
+  MONGO_DB_NAME: "react"
   SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
 
 configMapData:
-  CONSUL_SERVICE_NAME:  "react"
-  CONSUL_HOST:          "172.17.0.1"
-  REGISTER_SERVICE:     "false"
-  DEV_DATABASE_URL:     "mongodb://mongodb-tmpdb:27017/react"
-  ENABLE_DB:            "false"
+  CONSUL_SERVICE_NAME:     "react"
+  CONSUL_HOST:             "172.17.0.1"
+  REGISTER_SERVICE:        "false"
+  DEV_DATABASE_URL_ORIGIN: "mongodb://mongodb-tmpdb:27017"
+  ENABLE_DB:               "false"
+
+
+##! create* creates and does NOT auto attach to the deployment
+##! attach* will NOT create but attach existing external resources to the deployment
+##! createAndAttach* will create AND attach to the deployment
+##! Using create* and attach* to create AND attach caused the lookup function
+##!  to use the old values and require 2 deployments to correctly reflect the update.
+##!  Thus the need for createAndAttach*.
 
 createExtraSecrets: []
-#  - name: extraSecret1
+#  - name: extrasecret1
 #    stringData:
 #      SECRETK1: secret_val1
 
 createExtraConfigMaps: []
-#  - name: extraCM1
+#  - name: extracm1
 #    data:
 #      ENVK1: env_val1
 
-##! attach* hash annotations wont output(correctly) in `helm template` due to the lookup function
-##! using lookup() updates hashs for when any attached (but not created) cms/secrets change
+##! attach* hash annotations will be static in `helm template` due to the lookup function
+##! lookup() is used to update hashs for when any external cms/secrets change
 ##! https://helm.sh/docs/chart_template_guide/functions_and_pipelines/#using-the-lookup-function
 attachExtraSecrets: []
-#  - extraSecret1
+#  - name: extrasecret1
 attachExtraConfigMaps: []
-#  - extraCM1
+#  - name: extracm1
+
+##! Opens up these resources to possibly be consumed by other resources
+##!  separately from configMapData and secretStringData
+createAndAttachExtraConfigMaps: []
+#  - name: extracm1
+#    data:
+#      ENVK1: env_val1
+
+createAndAttachExtraSecrets: []
+#  - name: extrasecret1
+#    stringData:
+#      SECRETK1: secret_val1
 
 ciLabels: {}
 ciAnnotations: {}

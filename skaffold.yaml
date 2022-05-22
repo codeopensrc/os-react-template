@@ -8,18 +8,24 @@ build:
       context: .
       docker:
         target: src
+        buildArgs:
+          BASE_IMAGE: alpine
+          BASE_IMAGE_TAG: 3.14
+          NODE_VER: 14.19.0-r0
+          NPM_VER: 7.17.0-r0
+          PM2_VER: 5.1.1
       sync:
         manual:
           - src: "src/**"
             dest: /home/app
           - src: "server/**"
-            dest: /home/app/server
+            dest: /home/app
           - src: "docker-compose.yml"
             dest: /home/app
 deploy:
   helm:
     releases:
-    - name: react
+    - name: react-template
       namespace: react
       createNamespace: true
       chartPath: helmchart
@@ -29,5 +35,24 @@ deploy:
         replicaCount: 1
         image:
           pullPolicy: IfNotPresent
+        service:
+          ports:
+            - servicePort: 80
+              targetContainerPortName: http
+            - servicePort: 5055
+              targetContainerPortName: reloader
+        containerPorts: 
+          - name: http
+            port: 80
+          - name: reloader
+            port: 5055
       imageStrategy:
         helm: {}
+      setFiles:
+        dotEnvFile: .env
+      setValues:
+        configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://mongodb:27017"
+        configMapData.LOG_EVERY_NUM_CHECKS: 5
+        configMapData.DEV_ENV:   "true"
+        configMapData.ENABLE_DB: "false"
+        configMapData.LIVE_RELOADER_PORT: 5055

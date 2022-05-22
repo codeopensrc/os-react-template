@@ -7,24 +7,35 @@ metadata:
     {{- with .Values.ciLabels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-    {{- if or .Values.ciAnnotations .Values.configMapData .Values.secretStringData .Values.attachExtraConfigMaps .Values.attachExtraSecrets }}
   annotations:
     {{- if .Values.configMapData }}
     configHash: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     {{- end }}
+    {{- range .Values.createAndAttachExtraConfigMaps }}
+    {{ .name }}Hash: {{ include (print $.Template.BasePath "/auxConfigmap.yaml") $ | sha256sum }}
+    {{- end }}
     {{- range .Values.attachExtraConfigMaps }}
-    {{ . }}Hash: {{ (default "" (lookup "v1" "ConfigMap" $.Release.Namespace .).data) | sha256sum }}
+    {{- if (lookup "v1" "ConfigMap" $.Release.Namespace .name) }}
+    {{ .name }}Hash: {{ (lookup "v1" "ConfigMap" $.Release.Namespace .name).data | toString | sha256sum }}
+    {{- end }}
     {{- end }}
     {{- if .Values.secretStringData }}
     secretHash: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     {{- end }}
+    {{- if .Values.dotEnvFile }}
+    dotEnvFileHash: {{ include (print $.Template.BasePath "/dotEnvSecret.yaml") . | sha256sum }}
+    {{- end }}
+    {{- range .Values.createAndAttachExtraSecrets }}
+    {{ .name }}Hash: {{ include (print $.Template.BasePath "/auxSecret.yaml") $ | sha256sum }}
+    {{- end }}
     {{- range .Values.attachExtraSecrets }}
-    {{ . }}Hash: {{ (default "" (lookup "v1" "Secret" $.Release.Namespace .).stringData) | sha256sum }}
+    {{- if (lookup "v1" "Secret" $.Release.Namespace .name) }}
+    {{ .name }}Hash: {{ (lookup "v1" "Secret" $.Release.Namespace .name).stringData | toString | sha256sum }}
+    {{- end }}
     {{- end }}
     {{- with .Values.ciAnnotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-  {{- end }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
@@ -44,19 +55,31 @@ spec:
         {{- with .Values.ciLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- if or .Values.ciAnnotations .Values.podAnnotations .Values.configMapData .Values.secretStringData .Values.attachExtraConfigMaps .Values.attachExtraSecrets }}
       annotations:
         {{- if .Values.configMapData }}
         configHash: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- end }}
+        {{- range .Values.createAndAttachExtraConfigMaps }}
+        {{ .name }}Hash: {{ include (print $.Template.BasePath "/auxConfigmap.yaml") $ | sha256sum }}
+        {{- end }}
         {{- range .Values.attachExtraConfigMaps }}
-        {{ . }}Hash: {{ (default "" (lookup "v1" "ConfigMap" $.Release.Namespace .).data) | sha256sum }}
+        {{- if (lookup "v1" "ConfigMap" $.Release.Namespace .name) }}
+        {{ .name }}Hash: {{ (lookup "v1" "ConfigMap" $.Release.Namespace .name).data | toString | sha256sum }}
+        {{- end }}
         {{- end }}
         {{- if .Values.secretStringData }}
         secretHash: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
+        {{- if .Values.dotEnvFile }}
+        dotEnvFileHash: {{ include (print $.Template.BasePath "/dotEnvSecret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- range .Values.createAndAttachExtraSecrets }}
+        {{ .name }}Hash: {{ include (print $.Template.BasePath "/auxSecret.yaml") $ | sha256sum }}
+        {{- end }}
         {{- range .Values.attachExtraSecrets }}
-        {{ . }}Hash: {{ (default "" (lookup "v1" "Secret" $.Release.Namespace .).stringData) | sha256sum }}
+        {{- if (lookup "v1" "Secret" $.Release.Namespace .name) }}
+        {{ .name }}Hash: {{ (lookup "v1" "Secret" $.Release.Namespace .name).stringData | toString | sha256sum }}
+        {{- end }}
         {{- end }}
         {{- with .Values.ciAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -64,7 +87,6 @@ spec:
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -106,7 +128,7 @@ spec:
               port: http
               {{- with .Values.containerProbe.httpHeaders }}
               httpHeaders:
-              {{- toYaml . | nindent 16 }}
+                {{- toYaml . | nindent 16 }}
               {{- end }}
             failureThreshold: 50
           readinessProbe:
@@ -115,28 +137,30 @@ spec:
               port: http
               {{- with .Values.containerProbe.httpHeaders }}
               httpHeaders:
-              {{- toYaml . | nindent 16 }}
+                {{- toYaml . | nindent 16 }}
               {{- end }}
             initialDelaySeconds: 5
-          {{- if or .Values.secretStringData .Values.configMapData .Values.attachExtraSecrets .Values.attachExtraConfigMaps }}
           envFrom:
             {{- if .Values.secretStringData }}
             - secretRef:
                 name: {{ include "react-template.fullname" . }}
             {{- end }}
-            {{- range .Values.attachExtraSecrets }}
+            {{- range concat .Values.createAndAttachExtraSecrets .Values.attachExtraSecrets }}
             - secretRef:
-                name: {{ . }}
+                name: {{ .name }}
             {{- end }}
             {{- if .Values.configMapData }}
             - configMapRef:
                 name: {{ include "react-template.fullname" . }}
             {{- end }}
-            {{- range .Values.attachExtraConfigMaps }}
+            {{- range concat .Values.createAndAttachExtraConfigMaps .Values.attachExtraConfigMaps }}
             - configMapRef:
-                name: {{ . }}
+                name: {{ .name }}
             {{- end }}
-          {{- end}}
+            {{- if .Values.dotEnvFile }}
+            - secretRef:
+                name: {{ include "react-template.fullname" . }}-dotenv
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

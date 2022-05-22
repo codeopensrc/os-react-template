@@ -12,7 +12,8 @@ const DB_RETRY_INTERVAL = 1000 * 2
 
 const SECRET_KEY = process.env.SAMPLE_SECRET || "dev";
 const MONGO_DB_NAME = process.env.MONGO_DB_NAME || "react";
-const DEV_DB_URL = process.env.DEV_DATABASE_URL || "";
+const DEV_DB_URL = process.env.DEV_DATABASE_URL_ORIGIN || "";
+const FULL_DEV_DB_URL = DEV_DB_URL ? `${DEV_DB_URL.replace(/\/$/, "")}/${MONGO_DB_NAME}` : ""
 
 let connectionAttempts = 0
 
@@ -30,7 +31,7 @@ module.exports = {
         let mongoOpts = {}
 
         // If we're not providing a URL look for address in consul
-        if(!DEV_DB_URL) {
+        if(!FULL_DEV_DB_URL) {
             consul.catalog.service.nodes("mongo", (err, res) => {
                 if (err) { console.log("ERR - db.js", err); }
                 let addrStr = "";
@@ -49,7 +50,7 @@ module.exports = {
             })
         }
         else {
-            this.mongoConnect(DEV_DB_URL, mongoOpts)
+            this.mongoConnect(FULL_DEV_DB_URL, mongoOpts)
         }
     },
 
