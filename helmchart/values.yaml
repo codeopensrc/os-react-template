@@ -86,6 +86,7 @@ affinity: {}
 
 
 ### Custom additions
+hotReload: false
 
 ##! Made a one-liner to substitute env values from .env into a helm values.yaml
 ##! Helm doesnt support env values in helm charts and felt like bad practice but it works

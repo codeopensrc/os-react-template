@@ -163,6 +163,31 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.hotReload }}
+          lifecycle:
+            postStart:
+              exec:
+                command: ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+          volumeMounts:
+            - name: shared-logs
+              mountPath: /var/log
+          {{- end }}
+        {{- if .Values.hotReload }}
+        - name: hotreload-logger
+          image: busybox
+          command: ["sh", "-c", 
+            "while [ ! -f /var/log/hotreload.log ]; do sleep 1; done; \
+             tail -f /var/log/hotreload.log"
+          ]
+          volumeMounts:
+            - name: shared-logs
+              mountPath: /var/log
+        {{- end }}
+      {{- if .Values.hotReload }}
+      volumes:
+        - name: shared-logs
+          emptyDir: {}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

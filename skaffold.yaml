@@ -46,6 +46,7 @@ deploy:
             port: 80
           - name: reloader
             port: 5055
+        hotReload: true
       imageStrategy:
         helm: {}
       setFiles:
