@@ -46,7 +46,21 @@ deploy:
             port: 80
           - name: reloader
             port: 5055
-        hotReload: true
+        lifecyclePostStartCommand:
+          ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+        volumeMounts:
+          - name: shared-logs
+            mountPath: /var/log
+        additionalContainers:
+          - name: hotreload-logger
+            image: busybox
+            command: ["sh", "-c", 
+              "while [ ! -f /var/log/hotreload.log ]; do sleep 1; done; \
+               tail -f /var/log/hotreload.log"
+            ]
+            volumeMounts:
+              - name: shared-logs
+                mountPath: /var/log
       imageStrategy:
         helm: {}
       setFiles:

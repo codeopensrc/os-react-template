@@ -2,6 +2,11 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+##! Made a one-liner to substitute env values from .env into a helm values.yaml
+##! Helm doesnt support env values in helm charts and felt like bad practice but it works
+##!  (export $(sed "/^\$\|^#/d" .env | xargs); envsubst < helmchart/values.yaml)
+
+
 replicaCount: 2
 
 image:
@@ -86,11 +91,6 @@ affinity: {}
 
 
 ### Custom additions
-hotReload: false
-
-##! Made a one-liner to substitute env values from .env into a helm values.yaml
-##! Helm doesnt support env values in helm charts and felt like bad practice but it works
-##!  (export $(sed "/^\$\|^#/d" .env | xargs); envsubst < helmchart/values.yaml)
 
 containerPorts: 
   - name: http
@@ -100,6 +100,24 @@ containerProbe:
   httpHeaders:
     - name: Host
       value: localhost
+
+lifecyclePostStartCommand: []
+#  ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+
+volumeMounts: []
+#  - name: shared-logs
+#    mountPath: /var/log
+
+additionalContainers: []
+#  - name: hotreload-logger
+#    image: busybox
+#    command: ["sh", "-c", 
+#      "while [ ! -f /var/log/hotreload.log ]; do sleep 1; done; \
+#       tail -f /var/log/hotreload.log"
+#    ]
+#    volumeMounts:
+#      - name: shared-logs
+#        mountPath: /var/log
 
 ## Can pass in .env using `--set-file dotEnvFile=.env`
 dotEnvFile: ""
