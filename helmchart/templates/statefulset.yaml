@@ -1,6 +1,6 @@
-{{- if eq (default false .Values.useStatefulSet) false }}
+{{- if eq (default false .Values.useStatefulSet) true }}
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "react-template.fullname" . }}
   labels:
@@ -41,14 +41,13 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 2
-      maxUnavailable: 1
   selector:
     matchLabels:
       {{- include "react-template.selectorLabels" . | nindent 6 }}
+  serviceName: {{ include "react-template.fullname" . }}
+  {{- if semverCompare ">=1.23-0" .Capabilities.KubeVersion.GitVersion }}
+  minReadySeconds: 3
+  {{- end }}
   template:
     metadata:
       labels:
@@ -111,6 +110,7 @@ spec:
                 {{- end }}
               topologyKey: "kubernetes.io/hostname"
             weight: 100
+      terminationGracePeriodSeconds: 10
       containers:
         - name: {{ include "react-template.fullname" . }}
           securityContext:
@@ -197,7 +197,7 @@ spec:
               {{- end }}
             {{- end }}
         {{- range .Values.additionalContainers }}
-        - name: {{ .name}}
+        - name: {{ .name }}
           image: {{ .image }}
           command: 
             {{- toYaml .command | nindent 12 }}
@@ -224,14 +224,9 @@ spec:
       volumes:
         {{- range .Values.volumeMounts }}
         {{- if .mountType }}
-        - name: {{ .name  }}
+        - name: {{ .name }}
           {{- toYaml .mountType | nindent 10 }}
         {{- end }}
-        {{- end }}
-        {{- if .Values.persistence.deployment.enabled }}
-        - persistentVolumeClaim:
-            claimName: {{ include "react-template.fullname" . }}
-          name: {{ include "react-template.fullname" . }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
@@ -245,4 +240,15 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if semverCompare ">=1.23-0" .Capabilities.KubeVersion.GitVersion }}
+      {{- if .persistence.statefulset.persistentVolumeClaimRetentionPolicy }}
+      persistentVolumeClaimRetentionPolicy:
+        {{- toYaml .persistence.statefulset.persistentVolumeClaimRetentionPolicy | nindent 8 }}
+      {{- end }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: {{ default (include "react-template.fullname" $) .Values.persistence.statefulset.volumeClaimTemplate.name }}
+      spec:
+        {{- toYaml .Values.persistence.statefulset.volumeClaimTemplate | nindent 8 }}
 {{- end }}

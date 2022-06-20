@@ -101,12 +101,67 @@ containerProbe:
     - name: Host
       value: localhost
 
-lifecyclePostStartCommand: []
-#  ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+useStatefulSet: false
+
+persistence:
+  statefulset:
+    volumeClaimTemplate:
+      #name: dbclaim
+      #helmResourcePolicy: "keep"
+      accessModes: ["ReadWriteOnce"]
+      volumeMode: Filesystem
+      storageClassName: "standard"
+      resources:
+        requests:
+          storage: 100Mi
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete
+      whenScaled: Delete
+  deployment:
+    enabled: false
+    volumeTemplate:
+      #name: logclaim
+      #helmResourcePolicy: "keep"
+      accessModes: ["ReadWriteOnce"]
+      volumeMode: Filesystem
+      storageClassName: "standard"
+      persistentVolumeReclaimPolicy: Delete
+      resources:
+        requests:
+          storage: 300Mi
+      persistentVolumeType:
+        local:
+          path: /data
+      nodeAffinity:
+        - key: kubernetes.io/hostname
+          values:
+            - minikube
+  storageClasses:
+  - name: local-storage
+    #volumeBindingMode: WaitForFirstConsumer
+    provisioner: "kubernetes.io/no-provisioner"
+    parameters: []
+
+
+volumeClaimMounts: []
+#  - name: database
+#    mountPath: /data/db
+#    subPath: db
 
 volumeMounts: []
 #  - name: shared-logs
 #    mountPath: /var/log
+#    mountType: 
+#      emptyDir: {}
+#  - name: mongoconf
+#    mountPath: /etc/mongo
+#    mountType: 
+#      configMap:
+#        name: mongod.conf
+
+lifecyclePostStartCommand: []
+#  ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+
 
 additionalContainers: []
 #  - name: hotreload-logger
@@ -170,6 +225,13 @@ createAndAttachExtraSecrets: []
 #  - name: extrasecret1
 #    stringData:
 #      SECRETK1: secret_val1
+
+createFileConfigMaps:
+#  - name: mongod.conf
+#    content:
+#      net:
+#        port: 27017
+#        bindIp: 0.0.0.0
 
 ciLabels: {}
 ciAnnotations: {}

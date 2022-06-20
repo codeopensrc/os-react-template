@@ -1,0 +1,35 @@
+{{- if .Values.persistence.deployment.enabled }}
+{{- $vol := .Values.persistence.deployment.volumeTemplate }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "react-template.fullname" . }}
+  labels:
+    {{- include "react-template.labels" . | nindent 4 }}
+  annotations:
+    {{- if $vol.helmResourcePolicy }}
+    helm.sh/resource-policy: {{ default "keep" $vol.helmResourcePolicy }}
+    {{- end }}
+spec:
+  capacity:
+    storage: {{ $vol.resources.requests.storage }}
+  volumeMode: {{ $vol.volumeMode }}
+  accessModes: {{ $vol.accessModes }}
+  persistentVolumeReclaimPolicy: {{ $vol.persistentVolumeReclaimPolicy }}
+  storageClassName: {{ $vol.storageClassName }}
+  {{- toYaml $vol.persistentVolumeType | nindent 2 }}
+  {{- if $vol.nodeAffinity }}
+  ## nodeAffinity req for local storage class
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+          {{- range $vol.nodeAffinity }}
+          - key: {{ .key }}
+            operator: In
+            values:
+              {{ .values }}
+          {{- end }}
+  {{- end }}
+---
+{{- end }}
