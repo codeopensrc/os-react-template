@@ -12,7 +12,11 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  {{- if eq .Values.service.type "None" }}
+  clusterIP: None
+  {{- else }}
   type: {{ .Values.service.type }}
+  {{- end }}
   ports:
     {{- range .Values.service.ports }}
     - port: {{ .servicePort }}

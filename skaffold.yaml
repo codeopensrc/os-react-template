@@ -31,6 +31,7 @@ profiles:
         namespace: react
         createNamespace: true
         chartPath: helmchart
+        wait: true
         overrides:
           replicaCount: 1
           image:
@@ -102,6 +103,123 @@ profiles:
           dotEnvFile: .env
         setValues:
           configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://mongo-react:27017"
+          configMapData.LOG_EVERY_NUM_CHECKS: 5
+          configMapData.DEV_ENV:   "true"
+          configMapData.ENABLE_DB: "true"
+          configMapData.LIVE_RELOADER_PORT: 5055
+
+- name: replica
+  build:
+    artifacts:
+      - image: registry.codeopensrc.com/os/react-template/app
+        context: .
+        docker:
+          target: src
+          buildArgs:
+            BASE_IMAGE: alpine
+            BASE_IMAGE_TAG: 3.14
+            NODE_VER: 14.19.0-r0
+            NPM_VER: 7.17.0-r0
+            PM2_VER: 5.1.1
+        sync:
+          manual:
+            - src: "src/**"
+              dest: /home/app
+            - src: "server/**"
+              dest: /home/app
+            - src: "docker-compose.yml"
+              dest: /home/app
+  deploy:
+    helm:
+      hooks:
+        before:
+        - container:
+            command: ["mongo", "--eval",
+                'rs.initiate( { _id : "rs0", members: [
+                { _id: 0, host: "mongo-react-0.mongo-react:27017" },
+                { _id: 1, host: "mongo-react-1.mongo-react:27017" },
+                { _id: 2, host: "mongo-react-2.mongo-react:27017" }
+            ]})']
+            podName: "mongo-react-0"
+      releases:
+      - name: mongo
+        namespace: react
+        createNamespace: true
+        chartPath: helmchart
+        wait: true
+        overrides:
+          replicaCount: 3
+          image:
+            repository: mongo
+            pullPolicy: IfNotPresent
+            tag: 4.4.6
+          #command: ["mongod", "-f", "/etc/mongo/mongod.conf"]
+          command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+          service:
+            type: None
+            ports:
+              - servicePort: 27017
+                targetContainerPortName: mongo
+          ingress:
+            enabled: false
+          containerPorts: 
+            - name: mongo
+              port: 27017
+          containerProbe: ""
+          useStatefulSet: true
+          volumeClaimMounts:
+            - mountPath: /data/db
+              subPath: db
+          secretStringData:
+            MONGO_INITDB_DATABASE: mongo
+          configMapData: {}
+        imageStrategy:
+          helm: {}
+      - name: react-template
+        namespace: react
+        createNamespace: true
+        chartPath: helmchart
+        artifactOverrides:
+          image: registry.codeopensrc.com/os/react-template/app
+        overrides:
+          replicaCount: 1
+          image:
+            pullPolicy: IfNotPresent
+          service:
+            ports:
+              - servicePort: 80
+                targetContainerPortName: http
+              - servicePort: 5055
+                targetContainerPortName: reloader
+          containerPorts: 
+            - name: http
+              port: 80
+            - name: reloader
+              port: 5055
+          lifecyclePostStartCommand:
+            ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+          volumeMounts:
+            - name: shared-logs
+              mountPath: /var/log
+              mountType: 
+                emptyDir: {}
+          additionalContainers:
+            - name: hotreload-logger
+              image: busybox
+              command: ["sh", "-c", 
+                "while [ ! -f /var/log/hotreload.log ]; do sleep 1; done; \
+                 tail -f /var/log/hotreload.log"
+              ]
+              volumeMounts:
+                - name: shared-logs
+                  mountPath: /var/log
+          createFileConfigMaps: []
+        imageStrategy:
+          helm: {}
+        setFiles:
+          dotEnvFile: .env
+        setValues:
+          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://mongo-react-0\\.mongo-react\\,mongo-react-1\\.mongo-react\\,mongo-react-2\\.mongo-react:27017"
           configMapData.LOG_EVERY_NUM_CHECKS: 5
           configMapData.DEV_ENV:   "true"
           configMapData.ENABLE_DB: "true"
