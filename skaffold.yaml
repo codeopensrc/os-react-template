@@ -108,6 +108,115 @@ profiles:
           configMapData.ENABLE_DB: "true"
           configMapData.LIVE_RELOADER_PORT: 5055
 
+- name: buildkit
+  build:
+    tagPolicy:
+      inputDigest: {}
+    artifacts:
+      - image: registry.codeopensrc.com/os/react-template/app
+        context: .
+        custom:
+          buildCommand: ./build.sh ctl
+          dependencies:
+            paths:
+            - src/**
+            - server/**
+            ignore:
+            - "**/*.swp"
+        sync:
+          manual:
+            - src: "src/**"
+              dest: /home/app
+            - src: "server/**"
+              dest: /home/app
+            - src: "docker-compose.yml"
+              dest: /home/app
+    local:
+      push: true
+  deploy:
+    helm:
+      releases:
+      - name: mongo
+        namespace: react
+        createNamespace: true
+        chartPath: helmchart
+        wait: true
+        overrides:
+          replicaCount: 1
+          image:
+            repository: mongo
+            pullPolicy: IfNotPresent
+            tag: 4.4.6
+          #command: ["mongod", "-f", "/etc/mongo/mongod.conf"]
+          service:
+            ports:
+              - servicePort: 27017
+                targetContainerPortName: mongo
+          ingress:
+            enabled: false
+          containerPorts: 
+            - name: mongo
+              port: 27017
+          containerProbe: ""
+          useStatefulSet: true
+          volumeClaimMounts:
+            - mountPath: /data/db
+              subPath: db
+          secretStringData:
+            MONGO_INITDB_DATABASE: mongo
+          configMapData: {}
+        imageStrategy:
+          helm: {}
+      - name: react-template
+        namespace: react
+        createNamespace: true
+        chartPath: helmchart
+        artifactOverrides:
+          image: registry.codeopensrc.com/os/react-template/app
+        overrides:
+          replicaCount: 1
+          image:
+            pullPolicy: IfNotPresent
+          service:
+            ports:
+              - servicePort: 80
+                targetContainerPortName: http
+              - servicePort: 5055
+                targetContainerPortName: reloader
+          containerPorts: 
+            - name: http
+              port: 80
+            - name: reloader
+              port: 5055
+          lifecyclePostStartCommand:
+            ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+          volumeMounts:
+            - name: shared-logs
+              mountPath: /var/log
+              mountType: 
+                emptyDir: {}
+          additionalContainers:
+            - name: hotreload-logger
+              image: busybox
+              command: ["sh", "-c", 
+                "while [ ! -f /var/log/hotreload.log ]; do sleep 1; done; \
+                 tail -f /var/log/hotreload.log"
+              ]
+              volumeMounts:
+                - name: shared-logs
+                  mountPath: /var/log
+          createFileConfigMaps: []
+        imageStrategy:
+          helm: {}
+        setFiles:
+          dotEnvFile: .env
+        setValues:
+          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://mongo-react:27017"
+          configMapData.LOG_EVERY_NUM_CHECKS: 5
+          configMapData.DEV_ENV:   "true"
+          configMapData.ENABLE_DB: "true"
+          configMapData.LIVE_RELOADER_PORT: 5055
+
 - name: replica
   build:
     artifacts:

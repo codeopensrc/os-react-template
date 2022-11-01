@@ -109,11 +109,11 @@ persistence:
       #name: dbclaim
       #helmResourcePolicy: "keep"
       accessModes: ["ReadWriteOnce"]
-      volumeMode: Filesystem
+      volumeMode: Filesystem #Or "Block" (uncommon)
       storageClassName: "standard"
       resources:
         requests:
-          storage: 100Mi
+          storage: 1Gi
     persistentVolumeClaimRetentionPolicy:
       whenDeleted: Delete
       whenScaled: Delete
@@ -123,12 +123,12 @@ persistence:
       #name: logclaim
       #helmResourcePolicy: "keep"
       accessModes: ["ReadWriteOnce"]
-      volumeMode: Filesystem
+      volumeMode: Filesystem #Or "Block" (uncommon)
       storageClassName: "standard"
       persistentVolumeReclaimPolicy: Delete
       resources:
         requests:
-          storage: 300Mi
+          storage: 1Gi
       persistentVolumeType:
         local:
           path: /data
