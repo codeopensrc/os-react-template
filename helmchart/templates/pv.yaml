@@ -11,12 +11,12 @@ metadata:
     helm.sh/resource-policy: {{ default "keep" $vol.helmResourcePolicy }}
     {{- end }}
 spec:
+  accessModes: {{ $vol.accessModes }}
+  volumeMode: {{ $vol.volumeMode }}
+  storageClassName: {{ $vol.storageClassName }}
   capacity:
     storage: {{ $vol.resources.requests.storage }}
-  volumeMode: {{ $vol.volumeMode }}
-  accessModes: {{ $vol.accessModes }}
   persistentVolumeReclaimPolicy: {{ $vol.persistentVolumeReclaimPolicy }}
-  storageClassName: {{ $vol.storageClassName }}
   {{- toYaml $vol.persistentVolumeType | nindent 2 }}
   {{- if $vol.nodeAffinity }}
   ## nodeAffinity req for local storage class
