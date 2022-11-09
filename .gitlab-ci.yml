@@ -409,9 +409,7 @@ stop_beta:
 commit_stable:
   stage: commit
   tags:
-  - prod ## We would get rid of this for 'kubernetes_builder_prod'
-  #### TODO: Make sure necessary binaries present in builder image
-  #- kubernetes_builder_prod
+  - kubernetes_builder_prod
   script:
   - *get_current_version
   - echo $CURVER
@@ -435,27 +433,22 @@ commit_stable:
 release_stable:
   stage: release
   tags:
-  - prod ## We would get rid of this for 'kubernetes_builder_prod'
-  #### TODO: Update flow to use buildctl... --output "name=TAG1,name=TAG2",push=true
-  #### We should be able to use --cache-from and --cache-to with gitlab registry if we want
-  #- kubernetes_builder_prod
+  - kubernetes_builder_prod
+  variables:
+    BUILD_TARGET: prod
+    IMPORT_CACHE_ARGS: |
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
   script:
-  - *docker_login
+  - *create_docker_json
   - *create_rc
   - echo $CURVER
   - echo $RC
-  - docker pull $PROJECT_APP_IMAGE:dev
-  - docker pull $PROJECT_APP_IMAGE:${RC}-beta || echo 0 #Remove echo if we ALWAYS want a rc-beta build first
   - *get_sha_to_build
   - echo $SHA_TO_BUILD
   - sed -i "s|${CURVER}-*.*|${CURVER}${SHA_TO_BUILD}|" docker-compose.yml
-  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev --cache-from $PROJECT_APP_IMAGE:${RC}-beta \
-    --target prod -t $PROJECT_APP_IMAGE:${CURVER}${SHA_TO_BUILD} ."
-  - docker tag $PROJECT_APP_IMAGE:${CURVER}${SHA_TO_BUILD} $PROJECT_APP_IMAGE:latest
-  - docker tag $PROJECT_APP_IMAGE:${CURVER}${SHA_TO_BUILD} $PROJECT_APP_IMAGE:${CURVER}-stable
-  - docker push $PROJECT_APP_IMAGE:${CURVER}${SHA_TO_BUILD}
-  - docker push $PROJECT_APP_IMAGE:${CURVER}-stable
-  - docker push $PROJECT_APP_IMAGE:latest
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${RC}-beta"'
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${CURVER}${SHA_TO_BUILD},${PROJECT_APP_IMAGE}:latest,${PROJECT_APP_IMAGE}:${CURVER}-stable"
+  - *build_image
   - *trigger_deploy_prod_job
   rules:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
@@ -470,9 +463,7 @@ release_stable:
 commit_version:
   stage: commit
   tags:
-  - prod ## We would get rid of this for 'kubernetes_builder_prod'
-  #### TODO: Make sure necessary binaries present in builder image
-  #- kubernetes_builder_prod
+  - kubernetes_builder_prod
   script:
   - echo $RELEASE
   - *create_next_version
@@ -500,27 +491,24 @@ commit_version:
 release_version:
   stage: release
   tags:
-  - prod ## We would get rid of this for 'kubernetes_builder_prod'
-  #### TODO: Update flow to use buildctl... --output "name=TAG1,name=TAG2",push=true
-  #### We should be able to use --cache-from and --cache-to with gitlab registry if we want
-  #- kubernetes_builder_prod
+  - kubernetes_builder_prod
+  variables:
+    BUILD_TARGET: prod
+    IMPORT_CACHE_ARGS: |
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
   script:
-  - *docker_login
+  - *create_docker_json
   - echo $RELEASE
   - *create_rc
   - *create_next_version
   - echo $CURVER
   - echo $RC
   - echo ${VERSION}
-  - docker pull $PROJECT_APP_IMAGE:dev
-  - docker pull $PROJECT_APP_IMAGE:${RC}-beta
-  - docker pull $PROJECT_APP_IMAGE:${CURVER}-stable || echo 0
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
-  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev --cache-from $PROJECT_APP_IMAGE:${RC}-beta \
-    --cache-from $PROJECT_APP_IMAGE:${CURVER}-stable --target prod -t $PROJECT_APP_IMAGE:$VERSION ."
-  - docker tag $PROJECT_APP_IMAGE:$VERSION $PROJECT_APP_IMAGE:latest
-  - docker push $PROJECT_APP_IMAGE:$VERSION
-  - docker push $PROJECT_APP_IMAGE:latest
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${RC}-beta"'
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${CURVER}-stable"'
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:$VERSION,${PROJECT_APP_IMAGE}:latest"
+  - *build_image
   - *trigger_deploy_prod_job
   rules:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
