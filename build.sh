@@ -22,7 +22,7 @@ BUILD_TARGET=src
 CACHE_FROM_IMAGE=${IMAGE//:*/:dev}
 
 BUILDKIT_POD_NAME=buildkitd-0
-BUILDKIT_POD_NAMESPACE=default
+BUILDKIT_POD_NAMESPACE=buildkitd
 
 #kubernetes:///buildkitd?deployment=&kubeconfig=
     #--addr kube-pod://buildkitd-0-5cf5fbcb59-f4h5j?namespace=buildkitd \
@@ -41,14 +41,10 @@ if [[ $1 == "ctl" ]]; then
     --opt target=${BUILD_TARGET} \
     --import-cache type=registry,ref=${CACHE_FROM_IMAGE} \
     --export-cache type=inline \
-    --output type=image,\"name=$IMAGE,name=${CACHE_FROM_IMAGE}\",push=true
+    --output type=image,\"name=$IMAGE,${CACHE_FROM_IMAGE}\",push=true
 
-
-    #--import-cache type=local,src=/tmp/buildkitcache \
-    #--export-cache type=local,dest=/tmp/buildkitcache \
     #--output type=docker,name=$IMAGE | minikube image load -
 fi
-    #--import-cache type=local,src=/tmp/buildkitcache \
 
 if [[ $1 == "buildx" ]]; then
   docker buildx build \

@@ -21,7 +21,9 @@ variables:
   DEPLOY_SNIP_FILENAME: ENVS.txt
   USE_DEPLOY_SNIP: "false"
   SAMPLE_SECRET: "secret_value"
-  #KUBERNETES_SERVICE_ACCOUNT_OVERWRITE:
+  BUILDKITD_POD: buildkitd-0
+  BUILDKITD_NAMESPACE: buildkitd
+  DOCKERFILE: Dockerfile
 
 default:
   before_script:
@@ -31,9 +33,16 @@ default:
   docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
 
 .apply_registry_secret: &apply_registry_secret
-  - kubectl create secret -n $KUBE_NAMESPACE docker-registry gitlab-registry 
+  - kubectl create secret -n $KUBE_NAMESPACE docker-registry gitlab-registry
     --docker-server="$CI_REGISTRY" --docker-username="$CI_REGISTRY_USER"
     --docker-password="$CI_REGISTRY_PASSWORD" -o yaml --dry-run=client | kubectl apply -n $KUBE_NAMESPACE -f -
+
+.create_docker_json: &create_docker_json
+  - |
+    mkdir ~/.docker && \
+    cat <<EOF > ~/.docker/config.json
+    {"auths":{"$CI_REGISTRY":{"auth":"$(echo -n ${CI_REGISTRY_USER}:${CI_REGISTRY_PASSWORD} | base64)"}}}
+    EOF
 
 .not_protected: &not_protected
   '$CI_COMMIT_REF_NAME != "dev" && $CI_COMMIT_REF_NAME != "master" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
@@ -102,6 +111,17 @@ default:
   - "[[ $RELEASE == 'minor' ]] && VERSION=${MAJOR}.${NEXT_MINOR}.0"
   - "[[ $RELEASE == 'patch' ]] && VERSION=${MAJOR}.${MINOR}.${NEXT_PATCH}"
 
+## Most likely be using skaffold + buildctl in script next
+## TODO: Support using multiple --build-arg
+.build_image: &build_image
+  #- skaffold build
+  - buildctl --addr kube-pod://${BUILDKITD_POD}?namespace=${BUILDKITD_NAMESPACE} build
+    --frontend dockerfile.v0 --local dockerfile=. --local context=.
+    --opt target=${BUILD_TARGET} --opt filename=./${DOCKERFILE}
+    --output type=image,\"name=${OUTPUT_IMGS}\",push=true
+    --export-cache type=inline
+    ${IMPORT_CACHE_ARGS}
+
 .create_helm_values: &create_helm_values
   - |
     REGISTER_SERVICE="false"
@@ -128,6 +148,7 @@ default:
 
 .deploy_helm_chart: &deploy_helm_chart
   - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" helmchart/Chart.yaml'
+  #- skaffold deploy
   - helm upgrade $APPNAME helmchart --install -f helm_ci_values.yaml -n $KUBE_NAMESPACE
   - helm history $APPNAME
   - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
@@ -145,6 +166,8 @@ workflow:
 
 echo_env_vars:
   stage: build
+  tags:
+  - kubernetes_builder
   script:
   - echo $CI_PIPELINE_SOURCE
   - echo $CI_COMMIT_REF_NAME
@@ -168,11 +191,16 @@ echo_env_vars:
 ########################
 build_review:
   stage: build
+  tags:
+  - kubernetes_builder
+  variables:
+    BUILD_TARGET: src
+    IMPORT_CACHE_ARGS: |
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
   script:
-  - *docker_login
-  - docker pull $PROJECT_APP_IMAGE:dev || echo 0
-  - docker build -f Dockerfile --force-rm --cache-from $PROJECT_APP_IMAGE:dev --target src -t $PROJECT_APP_IMAGE:$CI_COMMIT_SHORT_SHA .
-  - docker push $PROJECT_APP_IMAGE:$CI_COMMIT_SHORT_SHA
+  - *create_docker_json
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+  - *build_image
   rules:
   - if: $CI_PIPELINE_SOURCE != "push" && $CI_PIPELINE_SOURCE != "web"
     when: never
@@ -230,16 +258,21 @@ stop_review:
 
 build_rc:
   stage: build
+  tags:
+  - kubernetes_builder_prod
+  variables:
+    BUILD_TARGET: src
+    IMPORT_CACHE_ARGS: |
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
   script:
-  - *docker_login
+  - *create_docker_json
   - *create_rc
-  - docker pull $PROJECT_APP_IMAGE:dev || echo 0
-  - docker pull $PROJECT_APP_IMAGE:$RC || echo 0
-  - docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev --target src -t $PROJECT_APP_IMAGE:dev .
-  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev \
-    --cache-from $PROJECT_APP_IMAGE:$RC --target prod -t $PROJECT_APP_IMAGE:$RC ."
-  - docker push $PROJECT_APP_IMAGE:dev
-  - docker push $PROJECT_APP_IMAGE:$RC
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:$RC"'
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:dev"
+  - *build_image
+  - BUILD_TARGET=prod
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:$RC"
+  - *build_image
   rules:
   - if: *is_dev_branch
 
@@ -301,15 +334,17 @@ stop_rc:
 build_beta:
   stage: build
   tags:
-  - prod
+  - kubernetes_builder_prod
+  variables:
+    BUILD_TARGET: prod
+    IMPORT_CACHE_ARGS: |
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
   script:
-  - *docker_login
+  - *create_docker_json
   - *create_rc
-  - docker pull $PROJECT_APP_IMAGE:dev
-  - docker pull $PROJECT_APP_IMAGE:$RC || echo 0 #Remove echo if we ALWAYS want a rc build first
-  - "docker build -f Dockerfile --force-rm --pull --cache-from $PROJECT_APP_IMAGE:dev \
-    --cache-from $PROJECT_APP_IMAGE:$RC --target prod -t $PROJECT_APP_IMAGE:${RC}-beta ."
-  - docker push $PROJECT_APP_IMAGE:${RC}-beta
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:$RC"'
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${RC}-beta"
+  - *build_image
   rules:
   - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "master"
   - if: $BUILD_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"
@@ -374,7 +409,9 @@ stop_beta:
 commit_stable:
   stage: commit
   tags:
-  - prod
+  - prod ## We would get rid of this for 'kubernetes_builder_prod'
+  #### TODO: Make sure necessary binaries present in builder image
+  #- kubernetes_builder_prod
   script:
   - *get_current_version
   - echo $CURVER
@@ -398,7 +435,10 @@ commit_stable:
 release_stable:
   stage: release
   tags:
-  - prod
+  - prod ## We would get rid of this for 'kubernetes_builder_prod'
+  #### TODO: Update flow to use buildctl... --output "name=TAG1,name=TAG2",push=true
+  #### We should be able to use --cache-from and --cache-to with gitlab registry if we want
+  #- kubernetes_builder_prod
   script:
   - *docker_login
   - *create_rc
@@ -430,7 +470,9 @@ release_stable:
 commit_version:
   stage: commit
   tags:
-  - prod
+  - prod ## We would get rid of this for 'kubernetes_builder_prod'
+  #### TODO: Make sure necessary binaries present in builder image
+  #- kubernetes_builder_prod
   script:
   - echo $RELEASE
   - *create_next_version
@@ -458,7 +500,10 @@ commit_version:
 release_version:
   stage: release
   tags:
-  - prod
+  - prod ## We would get rid of this for 'kubernetes_builder_prod'
+  #### TODO: Update flow to use buildctl... --output "name=TAG1,name=TAG2",push=true
+  #### We should be able to use --cache-from and --cache-to with gitlab registry if we want
+  #- kubernetes_builder_prod
   script:
   - *docker_login
   - echo $RELEASE
