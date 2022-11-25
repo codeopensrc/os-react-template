@@ -199,7 +199,7 @@ profiles:
             - name: hotreload-logger
               image: busybox
               command: ["sh", "-c", 
-                "while [ ! -f /var/log/hotreload.log ]; do sleep 1; done; \
+                "while [ ! -f /var/log/hotreload.log ]; do sleep 3; done; \
                  tail -f /var/log/hotreload.log"
               ]
               volumeMounts:

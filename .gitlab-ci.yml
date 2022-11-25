@@ -28,11 +28,10 @@ variables:
 default:
   before_script:
   - SERVICE_NAME=${SERVICE_NAME//\./-}
-
-.docker_login: &docker_login
-  docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+  - SERVER_DOMAIN=${CI_SERVER_HOST//gitlab\./}
 
 .apply_registry_secret: &apply_registry_secret
+  - kubectl delete secret -n $KUBE_NAMESPACE gitlab-registry || true
   - kubectl create secret -n $KUBE_NAMESPACE docker-registry gitlab-registry
     --docker-server="$CI_REGISTRY" --docker-username="$CI_REGISTRY_USER"
     --docker-password="$CI_REGISTRY_PASSWORD" -o yaml --dry-run=client | kubectl apply -n $KUBE_NAMESPACE -f -
@@ -129,6 +128,8 @@ default:
     [[ $KUBE_NAMESPACE = "production" ]] && REGISTER_SERVICE="true"
     [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_DB="false"
     cat <<EOF > helm_ci_values.yaml
+    imagePullSecrets:
+      - name: gitlab-registry
     image:
       repository: "${PROJECT_APP_IMAGE}"
       tag: "${HELM_IMAGE_TAG}"
@@ -149,8 +150,8 @@ default:
 .deploy_helm_chart: &deploy_helm_chart
   - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" helmchart/Chart.yaml'
   #- skaffold deploy
-  - helm upgrade $APPNAME helmchart --install -f helm_ci_values.yaml -n $KUBE_NAMESPACE
-  - helm history $APPNAME
+  - helm upgrade $APPNAME helmchart --install -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait
+  - helm history $APPNAME -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
   - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
   - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
@@ -210,23 +211,29 @@ deploy_review:
   stage: deploy
   tags:
   - kubernetes
+  variables:
+    KUBE_NAMESPACE: review
   script:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
   - HELM_IMAGE_TAG=${CI_COMMIT_SHORT_SHA}
+  - KUBE_INGRESS_BASE_DOMAIN=dev.${SERVER_DOMAIN}
+  - 'URL=http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
+  - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
-  - 'echo "URL: http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
+  - 'echo "URL: ${URL}"'
   - *apply_registry_secret
   - *create_helm_values
   - *deploy_helm_chart
+  artifacts:
+    reports:
+      dotenv: deploy.env 
   environment:
     name: review/$CI_COMMIT_REF_NAME
-    url: "http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+    url: $URL
     on_stop: stop_review
     auto_stop_in: 1 hour
   rules:
-  - if: $CI_KUBERNETES_ACTIVE != "true"
-    when: never
   - if: *not_protected
 
 stop_review:
@@ -234,18 +241,17 @@ stop_review:
   tags:
   - kubernetes
   variables:
+    KUBE_NAMESPACE: review
     GIT_STRATEGY: none
   script:
   - echo "Stop commit"
-  - echo ${KUBE_NAMESPACE}
+  - echo "$KUBE_NAMESPACE"
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
   - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
   environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
   rules:
-  - if: $CI_KUBERNETES_ACTIVE != "true"
-    when: never
   - if: *not_protected
     when: manual
 
@@ -280,26 +286,30 @@ deploy_rc:
   stage: deploy
   tags:
   - kubernetes_prod
+  variables:
+    KUBE_NAMESPACE: dev
   script:
   - *create_rc
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   - HELM_IMAGE_TAG=${RC}
+  - KUBE_INGRESS_BASE_DOMAIN=dev.${SERVER_DOMAIN}
+  - 'URL=http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
+  - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
-  - 'echo "URL: http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
+  - 'echo "URL: ${URL}"'
   - *apply_registry_secret
   - *create_helm_values
   - *deploy_helm_chart
+  artifacts:
+    reports:
+      dotenv: deploy.env 
   environment:
     name: dev
-    url: "http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+    url: $URL
     on_stop: stop_rc
     auto_stop_in: 1 hour
-    kubernetes:
-      namespace: dev
   rules:
-  - if: $CI_KUBERNETES_ACTIVE != "true"
-    when: never
   - if: *is_dev_branch
 
 stop_rc:
@@ -307,19 +317,17 @@ stop_rc:
   tags:
   - kubernetes_prod
   variables:
+    KUBE_NAMESPACE: dev
     GIT_STRATEGY: none
   script:
   - echo "Stop rc"
+  - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
   environment:
     name: dev
     action: stop
-    kubernetes:
-      namespace: dev
   rules:
-  - if: $CI_KUBERNETES_ACTIVE != "true"
-    when: never
   - if: *is_dev_branch
     when: manual
 
@@ -356,27 +364,33 @@ deploy_beta:
   stage: deploy
   tags:
   - kubernetes_prod
+  variables:
+    KUBE_NAMESPACE: beta
   script:
   - *create_rc
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   - HELM_IMAGE_TAG=${RC}-beta
+  - KUBE_INGRESS_BASE_DOMAIN=beta.${SERVER_DOMAIN}
+  - 'URL=https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
+  - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
-  - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
+  - 'echo "URL: ${URL}"'
   - *apply_registry_secret
   - *create_helm_values
   - *deploy_helm_chart
+  artifacts:
+    reports:
+      dotenv: deploy.env 
   environment:
     name: beta
-    url: "https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
+    url: $URL
     on_stop: stop_beta
     auto_stop_in: 1 hour
-    kubernetes:
-      namespace: beta
   rules:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
     when: never
-  - if: '$SKIP_BETA == "true" ||  $RELEASE != null || $CI_KUBERNETES_ACTIVE != "true"'
+  - if: '$SKIP_BETA == "true" ||  $RELEASE != null'
     when: never
   - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
 
@@ -385,20 +399,20 @@ stop_beta:
   tags:
   - kubernetes_prod
   variables:
+    KUBE_NAMESPACE: beta
     GIT_STRATEGY: none
   script:
   - echo "Stop beta"
+  - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
   environment:
     name: beta
     action: stop
-    kubernetes:
-      namespace: beta
   rules:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
     when: never
-  - if: '$SKIP_BETA == "true" ||  $RELEASE != null || $KEEP_BETA != null || $CI_KUBERNETES_ACTIVE != "true"'
+  - if: '$SKIP_BETA == "true" ||  $RELEASE != null || $KEEP_BETA != null'
     when: never
   - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
     when: manual
@@ -422,7 +436,7 @@ commit_stable:
   - git config --global user.name "${GITLAB_USER_NAME}"
   - git config --global user.email "${GITLAB_USER_EMAIL}"
   - 'git commit -m "Stable: ${CURVER}-${COMMIT_SHA}" --author="GitLab Runner <gitlab-runner@${CI_SERVER_HOST}>" -s'
-  - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/$CI_PROJECT_PATH'
+  - 'git remote set-url origin https://${TOKEN_REPO_WRITE_NAME}:${TOKEN_REPO_SELF_WRITE}@$CI_SERVER_HOST/${CI_PROJECT_PATH}.git'
   - git push -o ci.skip origin HEAD:master
   rules:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
@@ -447,6 +461,8 @@ release_stable:
   - echo $RC
   - *get_sha_to_build
   - echo $SHA_TO_BUILD
+  ##! We update tag in docker-compose.yml cause we build it into the image for consul to get the current tag
+  ##! Once we do a consul side-loaded container in helm for apps or something we can probably finally remove
   - sed -i "s|${CURVER}-*.*|${CURVER}${SHA_TO_BUILD}|" docker-compose.yml
   - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${RC}-beta"'
   - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${CURVER}${SHA_TO_BUILD},${PROJECT_APP_IMAGE}:latest,${PROJECT_APP_IMAGE}:${CURVER}-stable"
@@ -508,6 +524,8 @@ release_version:
   - echo $CURVER
   - echo $RC
   - echo ${VERSION}
+  ##! We update tag in docker-compose.yml cause we build it into the image for consul to get the current tag
+  ##! Once we do a consul side-loaded container in helm for apps or something we can probably finally remove
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
   - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${RC}-beta"'
   - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${CURVER}-stable"'
@@ -530,12 +548,16 @@ deploy_production:
   stage: deploy_prod
   tags:
   - kubernetes_prod
+  variables:
+    KUBE_NAMESPACE: production
   script:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   - HELM_IMAGE_TAG=""
+  - 'URL=https://${SUBDOMAIN}.${SERVER_DOMAIN}'
+  - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
-  - 'echo "URL: https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"'
+  - 'echo "URL: ${URL}"'
   - *apply_registry_secret
   - *create_helm_values
   - *deploy_helm_chart
@@ -545,14 +567,13 @@ deploy_production:
   - '[[ -n $FOUND_ID ]] && exit 0'
   - echo "$CI_PROJECT_ID" >> $DEPLOY_SNIP_FILENAME
   - *update_deploy_snippet
+  artifacts:
+    reports:
+      dotenv: deploy.env 
   environment:
     name: production
-    url: "https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}"
-    kubernetes:
-      namespace: production
+    url: $URL
   rules:
-  - if: $CI_KUBERNETES_ACTIVE != "true"
-    when: never
   - if: $ONLY_DEPLOY_PROD == "true"
     when: always
   - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "pipeline" && $CI_COMMIT_REF_NAME == "master"'
@@ -566,9 +587,11 @@ stop_production:
   tags:
   - kubernetes_prod
   variables:
+    KUBE_NAMESPACE: production
     GIT_STRATEGY: none
   script:
   - echo "Stop prod"
+  - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
   - '[[ -z $USE_DEPLOY_SNIP || $USE_DEPLOY_SNIP != "true" ]] && exit 0'
@@ -578,8 +601,6 @@ stop_production:
   environment:
     name: production
     action: stop
-    kubernetes:
-      namespace: production
   rules:
   - if: '$STOP_PROD == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master"'
 
