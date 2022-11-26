@@ -102,21 +102,37 @@ containerProbe:
       value: localhost
 
 useStatefulSet: false
+statefulSetPodManagementPolicy: ""
+
+job:
+  enabled: false
+  annotations:
+    "helm.sh/hook": "post-install"
+  image:
+    repository: busybox
+    pullPolicy: Always
+    tag: ""
+  backoffLimit: 0
+  restartPolicy: Never
+  command:
+  - bash
+  - -c
+  - echo "test"
 
 persistence:
   statefulset:
+    #volumeClaimTemplateName: database
     volumeClaimTemplate:
-      #name: dbclaim
       #helmResourcePolicy: "keep"
       accessModes: ["ReadWriteOnce"]
       volumeMode: Filesystem #Or "Block" (uncommon)
-      storageClassName: "standard"
+      #storageClassName: ""
       resources:
         requests:
           storage: 1Gi
     persistentVolumeClaimRetentionPolicy:
-      whenDeleted: Delete
-      whenScaled: Delete
+      whenDeleted: Retain
+      whenScaled: Retain
   deployment:
     enabled: false
     volumeTemplate:
@@ -124,7 +140,7 @@ persistence:
       #helmResourcePolicy: "keep"
       accessModes: ["ReadWriteOnce"]
       volumeMode: Filesystem #Or "Block" (uncommon)
-      storageClassName: "standard"
+      #storageClassName: ""
       persistentVolumeReclaimPolicy: Delete
       resources:
         requests:

@@ -1,0 +1,23 @@
+{{- if .Values.job.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "react-template.fullname" . }}-job
+  annotations:
+    {{- with .Values.job.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ttlSecondsAfterFinished: {{ default 120 .Values.job.ttlSecondsAfterFinished }}
+  template:
+    spec:
+      containers:
+      - name: {{ include "react-template.fullname" . }}-post-install-job
+        image: {{ .Values.job.image.repository }}:{{ default "latest" .Values.job.image.tag }}
+        imagePullPolicy: {{ .Values.job.image.pullPolicy }}
+        command: 
+          {{- toYaml .Values.job.command | nindent 10 }}
+      restartPolicy: {{ .Values.job.restartPolicy }}
+  backoffLimit: {{ .Values.job.backoffLimit }}
+---
+{{- end }}

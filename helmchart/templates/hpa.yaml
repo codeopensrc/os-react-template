@@ -1,6 +1,5 @@
+{{- if .Values.autoscaling.enabled }}
 ###! This is here for future reference
-
-#{{- if .Values.autoscaling.enabled }}
 #apiVersion: autoscaling/v2beta1
 #kind: HorizontalPodAutoscaler
 #metadata:
@@ -27,4 +26,4 @@
 #        name: memory
 #        targetAverageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
 #    {{- end }}
-#{{- end }}
+{{- end }}

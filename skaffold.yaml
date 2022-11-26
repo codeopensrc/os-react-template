@@ -1,10 +1,18 @@
+## TODO: yaml anchors
+## TODO: separate skaffold files
+## TODO: sensible clarification/defaults between local vs remote
 apiVersion: skaffold/v2beta28
 kind: Config
 metadata:
   name: react-template
 profiles: 
-- name: dev
+- name: minikube
+  activation:
+  - kubeContext: minikube
   build:
+    ### Uncomment when deploying to remote cluster
+    #local:
+    #  push: true
     artifacts:
       - image: registry.codeopensrc.com/os/react-template/app
         context: .
@@ -27,7 +35,7 @@ profiles:
   deploy:
     helm:
       releases:
-      - name: mongo
+      - name: react-db
         namespace: react
         createNamespace: true
         chartPath: helmchart
@@ -50,6 +58,10 @@ profiles:
               port: 27017
           containerProbe: ""
           useStatefulSet: true
+          persistence:
+            statefulset:
+              persistentVolumeClaimRetentionPolicy:
+                whenDeleted: Delete
           volumeClaimMounts:
             - mountPath: /data/db
               subPath: db
@@ -80,7 +92,7 @@ profiles:
             - name: reloader
               port: 5055
           lifecyclePostStartCommand:
-            ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+            ["/bin/sh", "-c", "npm run reloader >> /var/log/hotreload.log 2>&1 &"]
           volumeMounts:
             - name: shared-logs
               mountPath: /var/log
@@ -89,8 +101,8 @@ profiles:
           additionalContainers:
             - name: hotreload-logger
               image: busybox
-              command: ["sh", "-c", 
-                "while [ ! -f /var/log/hotreload.log ]; do sleep 1; done; \
+              command: ["/bin/sh", "-c", 
+                "while [ ! -f /var/log/hotreload.log ]; do sleep 5; done; \
                  tail -f /var/log/hotreload.log"
               ]
               volumeMounts:
@@ -102,7 +114,7 @@ profiles:
         setFiles:
           dotEnvFile: .env
         setValues:
-          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://mongo-react:27017"
+          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://react-db:27017"
           configMapData.LOG_EVERY_NUM_CHECKS: 5
           configMapData.DEV_ENV:   "true"
           configMapData.ENABLE_DB: "true"
@@ -110,8 +122,8 @@ profiles:
 
 - name: buildkit
   build:
-    tagPolicy:
-      inputDigest: {}
+    local:
+      push: true
     artifacts:
       - image: registry.codeopensrc.com/os/react-template/app
         context: .
@@ -131,12 +143,10 @@ profiles:
               dest: /home/app
             - src: "docker-compose.yml"
               dest: /home/app
-    local:
-      push: true
   deploy:
     helm:
       releases:
-      - name: mongo
+      - name: react-db
         namespace: react
         createNamespace: true
         chartPath: helmchart
@@ -159,6 +169,10 @@ profiles:
               port: 27017
           containerProbe: ""
           useStatefulSet: true
+          persistence:
+            statefulset:
+              persistentVolumeClaimRetentionPolicy:
+                whenDeleted: Delete
           volumeClaimMounts:
             - mountPath: /data/db
               subPath: db
@@ -189,7 +203,7 @@ profiles:
             - name: reloader
               port: 5055
           lifecyclePostStartCommand:
-            ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+            ["/bin/sh", "-c", "npm run reloader >> /var/log/hotreload.log 2>&1 &"]
           volumeMounts:
             - name: shared-logs
               mountPath: /var/log
@@ -198,8 +212,8 @@ profiles:
           additionalContainers:
             - name: hotreload-logger
               image: busybox
-              command: ["sh", "-c", 
-                "while [ ! -f /var/log/hotreload.log ]; do sleep 3; done; \
+              command: ["/bin/sh", "-c", 
+                "while [ ! -f /var/log/hotreload.log ]; do sleep 5; done; \
                  tail -f /var/log/hotreload.log"
               ]
               volumeMounts:
@@ -211,7 +225,7 @@ profiles:
         setFiles:
           dotEnvFile: .env
         setValues:
-          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://mongo-react:27017"
+          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://react-db:27017"
           configMapData.LOG_EVERY_NUM_CHECKS: 5
           configMapData.DEV_ENV:   "true"
           configMapData.ENABLE_DB: "true"
@@ -219,17 +233,19 @@ profiles:
 
 - name: replica
   build:
+    local:
+      push: true
     artifacts:
       - image: registry.codeopensrc.com/os/react-template/app
         context: .
-        docker:
-          target: src
-          buildArgs:
-            BASE_IMAGE: alpine
-            BASE_IMAGE_TAG: 3.14
-            NODE_VER: 14.19.0-r0
-            NPM_VER: 7.17.0-r0
-            PM2_VER: 5.1.1
+        custom:
+          buildCommand: ./build.sh ctl
+          dependencies:
+            paths:
+            - src/**
+            - server/**
+            ignore:
+            - "**/*.swp"
         sync:
           manual:
             - src: "src/**"
@@ -240,18 +256,8 @@ profiles:
               dest: /home/app
   deploy:
     helm:
-      hooks:
-        before:
-        - container:
-            command: ["mongo", "--eval",
-                'rs.initiate( { _id : "rs0", members: [
-                { _id: 0, host: "mongo-react-0.mongo-react:27017" },
-                { _id: 1, host: "mongo-react-1.mongo-react:27017" },
-                { _id: 2, host: "mongo-react-2.mongo-react:27017" }
-            ]})']
-            podName: "mongo-react-0"
       releases:
-      - name: mongo
+      - name: react-db
         namespace: react
         createNamespace: true
         chartPath: helmchart
@@ -262,7 +268,6 @@ profiles:
             repository: mongo
             pullPolicy: IfNotPresent
             tag: 4.4.6
-          #command: ["mongod", "-f", "/etc/mongo/mongod.conf"]
           command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
           service:
             type: None
@@ -276,6 +281,29 @@ profiles:
               port: 27017
           containerProbe: ""
           useStatefulSet: true
+          statefulSetPodManagementPolicy: "Parallel"
+          job:
+            enabled: true
+            image:
+              repository: mongo
+              pullPolicy: Always
+              tag: "4.4.6"
+            backoffLimit: 0
+            restartPolicy: Never
+            command:
+            - bash
+            - -c
+            - |
+              mongo --host "react-db-0.react-db" --eval \
+                "rs.initiate( { _id : 'rs0', members: [ 
+                    { _id: 0, host: 'react-db-0.react-db:27017' },
+                    { _id: 1, host: 'react-db-1.react-db:27017' },
+                    { _id: 2, host: 'react-db-2.react-db:27017' }
+                ]})";
+          persistence:
+            statefulset:
+              persistentVolumeClaimRetentionPolicy:
+                whenDeleted: Delete
           volumeClaimMounts:
             - mountPath: /data/db
               subPath: db
@@ -306,7 +334,7 @@ profiles:
             - name: reloader
               port: 5055
           lifecyclePostStartCommand:
-            ["sh", "-c", "npm run reloader > /var/log/hotreload.log &"]
+            ["/bin/sh", "-c", "npm run reloader >> /var/log/hotreload.log 2>&1 &"]
           volumeMounts:
             - name: shared-logs
               mountPath: /var/log
@@ -315,8 +343,8 @@ profiles:
           additionalContainers:
             - name: hotreload-logger
               image: busybox
-              command: ["sh", "-c", 
-                "while [ ! -f /var/log/hotreload.log ]; do sleep 1; done; \
+              command: ["/bin/sh", "-c", 
+                "while [ ! -f /var/log/hotreload.log ]; do sleep 5; done; \
                  tail -f /var/log/hotreload.log"
               ]
               volumeMounts:
@@ -328,7 +356,7 @@ profiles:
         setFiles:
           dotEnvFile: .env
         setValues:
-          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://mongo-react-0\\.mongo-react\\,mongo-react-1\\.mongo-react\\,mongo-react-2\\.mongo-react:27017"
+          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://react-db-0\\.react-db\\,react-db-1\\.react-db\\,react-db-2\\.react-db:27017"
           configMapData.LOG_EVERY_NUM_CHECKS: 5
           configMapData.DEV_ENV:   "true"
           configMapData.ENABLE_DB: "true"

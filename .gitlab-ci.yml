@@ -110,6 +110,19 @@ default:
   - "[[ $RELEASE == 'minor' ]] && VERSION=${MAJOR}.${NEXT_MINOR}.0"
   - "[[ $RELEASE == 'patch' ]] && VERSION=${MAJOR}.${MINOR}.${NEXT_PATCH}"
 
+.create_next_chart_version: &create_next_chart_version
+  - PROD_CHART=$(awk "/version:/{print; exit;}" helmchart/Chart.yaml)
+  - CURCHART=$(echo $PROD_CHART | cut -d ":" -f2 | cut -d "-" -f1)
+  - MAJOR_CHART=$(echo $CURCHART | cut -d "." -f 1)
+  - MINOR_CHART=$(echo $CURCHART | cut -d "." -f 2)
+  - PATCH_CHART=$(echo $CURCHART | cut -d "." -f 3)
+  - NEXT_MAJOR_CHART=$(($MAJOR_CHART + 1))
+  - NEXT_MINOR_CHART=$(($MINOR_CHART + 1))
+  - NEXT_PATCH_CHART=$(($PATCH_CHART + 1))
+  - "[[ $RELEASE == 'major' ]] && CHART_VERSION=${NEXT_MAJOR_CHART}.0.0"
+  - "[[ $RELEASE == 'minor' ]] && CHART_VERSION=${MAJOR_CHART}.${NEXT_MINOR_CHART}.0"
+  - "[[ $RELEASE == 'patch' ]] && CHART_VERSION=${MAJOR_CHART}.${MINOR_CHART}.${NEXT_PATCH_CHART}"
+
 ## Most likely be using skaffold + buildctl in script next
 ## TODO: Support using multiple --build-arg
 .build_image: &build_image
@@ -426,11 +439,13 @@ commit_stable:
   - kubernetes_builder_prod
   script:
   - *get_current_version
+  - *create_next_chart_version
   - echo $CURVER
   - COMMIT_SHA=$(git log -1 --pretty=format:%h)
   - echo $COMMIT_SHA
   - *exit_if_sha_matches_stable
   - sed -i "s|${CURVER}-*.*|${CURVER}-${COMMIT_SHA}|" docker-compose.yml
+  - 'sed -i "s|version:${CURCHART}|version:${CHART_VERSION}|" helmchart/Chart.yaml'
   - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${CURVER}-${COMMIT_SHA}\"|" helmchart/Chart.yaml'
   - git add docker-compose.yml helmchart/Chart.yaml
   - git config --global user.name "${GITLAB_USER_NAME}"
@@ -485,6 +500,7 @@ commit_version:
   script:
   - echo $RELEASE
   - *create_next_version
+  - *create_next_chart_version
   - echo $CURVER
   - echo ${VERSION}
   - 'curl "${CI_API_V4_URL}/projects/$CI_PROJECT_ID/merge_requests?state=merged&target_branch=$CI_DEFAULT_BRANCH" > mreq.json'
@@ -492,6 +508,7 @@ commit_version:
   - bash genlog.sh $RELEASE -s $CI_SERVER_URL -p $CI_PROJECT_PATH -t $CURVER -v -m mreq.json -n $NOTES
   - git add CHANGELOG.md 2>/dev/null || echo 0
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
+  - 'sed -i "s|version:${CURCHART}|version:${CHART_VERSION}|" helmchart/Chart.yaml'
   - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${VERSION}\"|" helmchart/Chart.yaml'
   - git add docker-compose.yml helmchart/Chart.yaml
   - git config --global user.name "${GITLAB_USER_NAME}"

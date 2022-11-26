@@ -17,3 +17,4 @@ logs
 dumps
 kube-deploy.sh
 build.sh
+helmchart/

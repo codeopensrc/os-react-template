@@ -34,6 +34,7 @@ module.exports = [{
         //unsafeCache: true,
         rules: [
             {test: /\.(svg|png|jpe?g)/, type: "asset", generator: {filename: "assets/images/[name][ext][query]"}},
+            {test: /\.(svg|png|jpe?g)/, type: "asset", generator: {filename: "style/images/[name][ext][query]"}},
             {test: /\.less/, use: ["style-loader", "css-loader", "less-loader"] },
             {test: /\.json/, use: ["json-loader"] },
             {test: /\.jsx/, use: {loader: "babel-loader",  options: {presets: ["@babel/preset-react"], plugins: ["react-hot-loader/babel"] }}},
@@ -42,11 +43,16 @@ module.exports = [{
     },
     // Runs hot reloading server when using `webpack serve`
     devServer: {
+        allowedHosts: "auto",
         host: "0.0.0.0",
         port: LIVE_RELOADER_PORT,
         hot: true,
         setupExitSignals: true,
-        proxy: { "/": 'http://localhost' },
+        proxy: [{
+            context: ["/api", "/images"],
+            target: `http://localhost` 
+        }],
+        client: { webSocketURL: `auto://0.0.0.0:0/ws` },
         // Uncomment to reload page on changes to server/
         //watchFiles: {
         //    paths: ["server"],
