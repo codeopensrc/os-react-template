@@ -12,3 +12,6 @@ npm-debug.log
 
 ignore/*
 .env
+
+# Allow env yaml files
+env*.yaml

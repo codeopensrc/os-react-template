@@ -1,126 +1,73 @@
-## TODO: yaml anchors
-## TODO: separate skaffold files
-## TODO: sensible clarification/defaults between local vs remote
-apiVersion: skaffold/v2beta28
+## Yaml anchors
+.sync: &sync
+  manual:
+  - src: "src/**"
+    dest: /home/app
+  - src: "server/**"
+    dest: /home/app
+  - src: "docker-compose.yml"
+    dest: /home/app
+
+.custom_build_deps: &custom_build_deps
+  paths:
+  - src/**
+  - server/**
+  ignore:
+  - "**/*.swp"
+
+.helm_flags: &helm_flags
+  install: ["--timeout=300s"]
+  upgrade: ["--timeout=300s"]
+
+### Main config
+apiVersion: skaffold/v3alpha1
 kind: Config
 metadata:
   name: react-template
-profiles: 
-- name: minikube
+profiles:
+### Build locally and deploy to minikube or remote cluster
+- name: docker
   activation:
   - kubeContext: minikube
   build:
     ### Uncomment when deploying to remote cluster
+    ### Not recommended to push if deploying to local minikube
     #local:
     #  push: true
     artifacts:
       - image: registry.codeopensrc.com/os/react-template/app
         context: .
-        docker:
-          target: src
-          buildArgs:
-            BASE_IMAGE: alpine
-            BASE_IMAGE_TAG: 3.14
-            NODE_VER: 14.20.1-r0
-            NPM_VER: 7.17.0-r0
-            PM2_VER: 5.1.1
-        sync:
-          manual:
-            - src: "src/**"
-              dest: /home/app
-            - src: "server/**"
-              dest: /home/app
-            - src: "docker-compose.yml"
-              dest: /home/app
+        custom:
+          buildCommand: ./build.sh buildx
+          dependencies: *custom_build_deps
+        sync: *sync
   deploy:
+    ### Deploy to specific context
+    #kubeContext: "minikube"
     helm:
+      flags: *helm_flags
       releases:
+      ## TODO: DB in same helm release and not separate
       - name: react-db
-        namespace: react
+        namespace: skaffold-react
         createNamespace: true
         chartPath: helmchart
         wait: true
-        overrides:
-          replicaCount: 1
-          image:
-            repository: mongo
-            pullPolicy: IfNotPresent
-            tag: 4.4.6
-          #command: ["mongod", "-f", "/etc/mongo/mongod.conf"]
-          service:
-            ports:
-              - servicePort: 27017
-                targetContainerPortName: mongo
-          ingress:
-            enabled: false
-          containerPorts: 
-            - name: mongo
-              port: 27017
-          containerProbe: ""
-          useStatefulSet: true
-          persistence:
-            statefulset:
-              persistentVolumeClaimRetentionPolicy:
-                whenDeleted: Delete
-          volumeClaimMounts:
-            - mountPath: /data/db
-              subPath: db
-          secretStringData:
-            MONGO_INITDB_DATABASE: mongo
-          configMapData: {}
-        imageStrategy:
-          helm: {}
+        valuesFiles:
+        - skaffold/docker/react-db-values.yaml
       - name: react-template
-        namespace: react
+        namespace: skaffold-react
         createNamespace: true
         chartPath: helmchart
-        artifactOverrides:
-          image: registry.codeopensrc.com/os/react-template/app
-        overrides:
-          replicaCount: 1
-          image:
-            pullPolicy: IfNotPresent
-          service:
-            ports:
-              - servicePort: 80
-                targetContainerPortName: http
-              - servicePort: 5055
-                targetContainerPortName: reloader
-          containerPorts: 
-            - name: http
-              port: 80
-            - name: reloader
-              port: 5055
-          lifecyclePostStartCommand:
-            ["/bin/sh", "-c", "npm run reloader >> /var/log/hotreload.log 2>&1 &"]
-          volumeMounts:
-            - name: shared-logs
-              mountPath: /var/log
-              mountType: 
-                emptyDir: {}
-          additionalContainers:
-            - name: hotreload-logger
-              image: busybox
-              command: ["/bin/sh", "-c", 
-                "while [ ! -f /var/log/hotreload.log ]; do sleep 5; done; \
-                 tail -f /var/log/hotreload.log"
-              ]
-              volumeMounts:
-                - name: shared-logs
-                  mountPath: /var/log
-          createFileConfigMaps: []
-        imageStrategy:
-          helm: {}
-        setFiles:
-          dotEnvFile: .env
-        setValues:
-          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://react-db:27017"
-          configMapData.LOG_EVERY_NUM_CHECKS: 5
-          configMapData.DEV_ENV:   "true"
-          configMapData.ENABLE_DB: "true"
-          configMapData.LIVE_RELOADER_PORT: 5055
+        valuesFiles:
+        - skaffold/docker/react-template-values.yaml
+        ## To pass in a local .env file
+        #setFiles:
+        #  dotEnvFile: .env
 
-- name: buildkit
+
+### Build remotely and deploy to remote cluster
+- name: remote
   build:
     local:
       push: true
@@ -128,109 +75,33 @@ profiles:
       - image: registry.codeopensrc.com/os/react-template/app
         context: .
         custom:
+          ### './build.sh ctl' or './build.sh remote_buildx'
           buildCommand: ./build.sh ctl
-          dependencies:
-            paths:
-            - src/**
-            - server/**
-            ignore:
-            - "**/*.swp"
-        sync:
-          manual:
-            - src: "src/**"
-              dest: /home/app
-            - src: "server/**"
-              dest: /home/app
-            - src: "docker-compose.yml"
-              dest: /home/app
+          dependencies: *custom_build_deps
+        sync: *sync
   deploy:
     helm:
+      flags: *helm_flags
       releases:
       - name: react-db
-        namespace: react
+        namespace: skaffold-react
         createNamespace: true
         chartPath: helmchart
         wait: true
-        overrides:
-          replicaCount: 1
-          image:
-            repository: mongo
-            pullPolicy: IfNotPresent
-            tag: 4.4.6
-          #command: ["mongod", "-f", "/etc/mongo/mongod.conf"]
-          service:
-            ports:
-              - servicePort: 27017
-                targetContainerPortName: mongo
-          ingress:
-            enabled: false
-          containerPorts: 
-            - name: mongo
-              port: 27017
-          containerProbe: ""
-          useStatefulSet: true
-          persistence:
-            statefulset:
-              persistentVolumeClaimRetentionPolicy:
-                whenDeleted: Delete
-          volumeClaimMounts:
-            - mountPath: /data/db
-              subPath: db
-          secretStringData:
-            MONGO_INITDB_DATABASE: mongo
-          configMapData: {}
-        imageStrategy:
-          helm: {}
+        valuesFiles:
+         - skaffold/remote/react-db-values.yaml
       - name: react-template
-        namespace: react
+        namespace: skaffold-react
         createNamespace: true
         chartPath: helmchart
-        artifactOverrides:
-          image: registry.codeopensrc.com/os/react-template/app
-        overrides:
-          replicaCount: 1
-          image:
-            pullPolicy: IfNotPresent
-          service:
-            ports:
-              - servicePort: 80
-                targetContainerPortName: http
-              - servicePort: 5055
-                targetContainerPortName: reloader
-          containerPorts: 
-            - name: http
-              port: 80
-            - name: reloader
-              port: 5055
-          lifecyclePostStartCommand:
-            ["/bin/sh", "-c", "npm run reloader >> /var/log/hotreload.log 2>&1 &"]
-          volumeMounts:
-            - name: shared-logs
-              mountPath: /var/log
-              mountType: 
-                emptyDir: {}
-          additionalContainers:
-            - name: hotreload-logger
-              image: busybox
-              command: ["/bin/sh", "-c", 
-                "while [ ! -f /var/log/hotreload.log ]; do sleep 5; done; \
-                 tail -f /var/log/hotreload.log"
-              ]
-              volumeMounts:
-                - name: shared-logs
-                  mountPath: /var/log
-          createFileConfigMaps: []
-        imageStrategy:
-          helm: {}
-        setFiles:
-          dotEnvFile: .env
-        setValues:
-          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://react-db:27017"
-          configMapData.LOG_EVERY_NUM_CHECKS: 5
-          configMapData.DEV_ENV:   "true"
-          configMapData.ENABLE_DB: "true"
-          configMapData.LIVE_RELOADER_PORT: 5055
+        valuesFiles:
+        - skaffold/remote/react-template-values.yaml
+        ## To pass in a local .env file
+        #setFiles:
+        #  dotEnvFile: .env
 
+
+### Build remotely and deploy to remote cluster with 3 replicated mongo databases
 - name: replica
   build:
     local:
@@ -240,124 +111,61 @@ profiles:
         context: .
         custom:
           buildCommand: ./build.sh ctl
-          dependencies:
-            paths:
-            - src/**
-            - server/**
-            ignore:
-            - "**/*.swp"
-        sync:
-          manual:
-            - src: "src/**"
-              dest: /home/app
-            - src: "server/**"
-              dest: /home/app
-            - src: "docker-compose.yml"
-              dest: /home/app
+          dependencies: *custom_build_deps
+        sync: *sync
   deploy:
     helm:
+      flags: *helm_flags
       releases:
       - name: react-db
-        namespace: react
+        namespace: skaffold-react
         createNamespace: true
         chartPath: helmchart
         wait: true
-        overrides:
-          replicaCount: 3
-          image:
-            repository: mongo
-            pullPolicy: IfNotPresent
-            tag: 4.4.6
-          command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
-          service:
-            type: None
-            ports:
-              - servicePort: 27017
-                targetContainerPortName: mongo
-          ingress:
-            enabled: false
-          containerPorts: 
-            - name: mongo
-              port: 27017
-          containerProbe: ""
-          useStatefulSet: true
-          statefulSetPodManagementPolicy: "Parallel"
-          job:
-            enabled: true
-            image:
-              repository: mongo
-              pullPolicy: Always
-              tag: "4.4.6"
-            backoffLimit: 0
-            restartPolicy: Never
-            command:
-            - bash
-            - -c
-            - |
-              mongo --host "react-db-0.react-db" --eval \
-                "rs.initiate( { _id : 'rs0', members: [ 
-                    { _id: 0, host: 'react-db-0.react-db:27017' },
-                    { _id: 1, host: 'react-db-1.react-db:27017' },
-                    { _id: 2, host: 'react-db-2.react-db:27017' }
-                ]})";
-          persistence:
-            statefulset:
-              persistentVolumeClaimRetentionPolicy:
-                whenDeleted: Delete
-          volumeClaimMounts:
-            - mountPath: /data/db
-              subPath: db
-          secretStringData:
-            MONGO_INITDB_DATABASE: mongo
-          configMapData: {}
-        imageStrategy:
-          helm: {}
+        valuesFiles:
+        - skaffold/replica/react-db-values.yaml
       - name: react-template
-        namespace: react
+        namespace: skaffold-react
         createNamespace: true
         chartPath: helmchart
-        artifactOverrides:
-          image: registry.codeopensrc.com/os/react-template/app
-        overrides:
-          replicaCount: 1
-          image:
-            pullPolicy: IfNotPresent
-          service:
-            ports:
-              - servicePort: 80
-                targetContainerPortName: http
-              - servicePort: 5055
-                targetContainerPortName: reloader
-          containerPorts: 
-            - name: http
-              port: 80
-            - name: reloader
-              port: 5055
-          lifecyclePostStartCommand:
-            ["/bin/sh", "-c", "npm run reloader >> /var/log/hotreload.log 2>&1 &"]
-          volumeMounts:
-            - name: shared-logs
-              mountPath: /var/log
-              mountType: 
-                emptyDir: {}
-          additionalContainers:
-            - name: hotreload-logger
-              image: busybox
-              command: ["/bin/sh", "-c", 
-                "while [ ! -f /var/log/hotreload.log ]; do sleep 5; done; \
-                 tail -f /var/log/hotreload.log"
-              ]
-              volumeMounts:
-                - name: shared-logs
-                  mountPath: /var/log
-          createFileConfigMaps: []
-        imageStrategy:
-          helm: {}
-        setFiles:
-          dotEnvFile: .env
-        setValues:
-          configMapData.DEV_DATABASE_URL_ORIGIN: "mongodb://react-db-0\\.react-db\\,react-db-1\\.react-db\\,react-db-2\\.react-db:27017"
-          configMapData.LOG_EVERY_NUM_CHECKS: 5
-          configMapData.DEV_ENV:   "true"
-          configMapData.ENABLE_DB: "true"
-          configMapData.LIVE_RELOADER_PORT: 5055
+        valuesFiles:
+        - skaffold/replica/react-template-values.yaml
+        ## To pass in a local .env file
+        #setFiles:
+        #  dotEnvFile: .env
+
+
+### Meant for ci builds
+### WIP
+- name: ci
+  build:
+    local:
+      push: true
+    artifacts:
+      ### TODO: CUSTOM REGISTRY
+      ### Might have to sed this...
+      - image: registry.codeopensrc.com/os/react-template/app
+        context: .
+        custom:
+          buildCommand: ./build.sh ctl prod
+  deploy:
+    helm:
+      flags: *helm_flags
+      releases:
+      - name: "{{.APPNAME}}-db"
+        namespace: "{{.KUBE_NAMESPACE}}"
+        createNamespace: true
+        chartPath: helmchart
+        wait: true
+        valuesFiles:
+        ### TODO: Review value files for ci
+        #- skaffold/ci/react-db-values.yaml
+        ## TODO: helm_ci_values.yaml for db
+      - name: "{{.APPNAME}}"
+        namespace: "{{.KUBE_NAMESPACE}}"
+        createNamespace: true
+        chartPath: helmchart
+        valuesFiles:
+        ### TODO: Review value files for ci
+        #- skaffold/ci/react-template-values.yaml
+        #- helm_ci_values.yaml

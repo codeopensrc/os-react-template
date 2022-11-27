@@ -190,6 +190,7 @@ additionalContainers: []
 #      - name: shared-logs
 #        mountPath: /var/log
 
+## NOTE: Always leave empty in values.yaml
 ## Can pass in .env using `--set-file dotEnvFile=.env`
 dotEnvFile: ""
 
