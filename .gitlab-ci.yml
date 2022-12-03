@@ -111,8 +111,8 @@ default:
   - "[[ $RELEASE == 'patch' ]] && VERSION=${MAJOR}.${MINOR}.${NEXT_PATCH}"
 
 .create_next_chart_version: &create_next_chart_version
-  - PROD_CHART=$(awk "/version:/{print; exit;}" helmchart/Chart.yaml)
-  - CURCHART=$(echo $PROD_CHART | cut -d ":" -f2 | cut -d "-" -f1)
+  - PROD_CHART=$(awk "/version:/{print; exit;}" charts/react/Chart.yaml)
+  - CURCHART=$(echo $PROD_CHART | cut -d ":" -f2 | cut -d "-" -f1 | sed "/^ *//")
   - MAJOR_CHART=$(echo $CURCHART | cut -d "." -f 1)
   - MINOR_CHART=$(echo $CURCHART | cut -d "." -f 2)
   - PATCH_CHART=$(echo $CURCHART | cut -d "." -f 3)
@@ -139,35 +139,53 @@ default:
     REGISTER_SERVICE="false"
     ENABLE_DB="false"
     [[ $KUBE_NAMESPACE = "production" ]] && REGISTER_SERVICE="true"
-    [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_DB="false"
+    ### Almost to temp ci dbs in helm
+    [[ $KUBE_NAMESPACE = "review" ]] && ENABLE_DB="true"
     cat <<EOF > helm_ci_values.yaml
-    imagePullSecrets:
-      - name: gitlab-registry
-    image:
-      repository: "${PROJECT_APP_IMAGE}"
-      tag: "${HELM_IMAGE_TAG}"
-    ciLabels:
-      app: "${APPNAME}"
-      env: "${CI_ENVIRONMENT_SLUG}"
-    ciAnnotations:
-      app.gitlab.com/app: "${CI_PROJECT_PATH_SLUG}"
-      app.gitlab.com/env: "${CI_ENVIRONMENT_SLUG}"
-    secretStringData:
-      MONGO_DB_NAME: "${MONGO_DB_NAME}"
-      SAMPLE_SECRET: "${SAMPLE_SECRET}"
-    configMapData:
-      REGISTER_SERVICE:     "${REGISTER_SERVICE}"
-      ENABLE_DB:            "${ENABLE_DB}"
+    app:
+      imagePullSecrets:
+        - name: gitlab-registry
+      image:
+        repository: "${PROJECT_APP_IMAGE}"
+        tag: "${HELM_IMAGE_TAG}"
+      ciLabels:
+        app: "${APPNAME}"
+        env: "${CI_ENVIRONMENT_SLUG}"
+      ciAnnotations:
+        app.gitlab.com/app: "${CI_PROJECT_PATH_SLUG}"
+        app.gitlab.com/env: "${CI_ENVIRONMENT_SLUG}"
+      secretStringData:
+        MONGO_DB_NAME: "${MONGO_DB_NAME}"
+        SAMPLE_SECRET: "${SAMPLE_SECRET}"
+      configMapData:
+        REGISTER_SERVICE:     "${REGISTER_SERVICE}"
+        ENABLE_DB:            "${ENABLE_DB}"
+        DEV_DATABASE_URL_ORIGIN: "mongodb://${APPNAME}-db:27017"
+    db:
+      ciLabels:
+        app: "${APPNAME}"
+        env: "${CI_ENVIRONMENT_SLUG}"
+      ciAnnotations:
+        app.gitlab.com/app: "${CI_PROJECT_PATH_SLUG}"
+        app.gitlab.com/env: "${CI_ENVIRONMENT_SLUG}"
+      secretStringData:
+        MONGO_INITDB_DATABASE: "${MONGO_DB_NAME}"
     EOF
 
 .deploy_helm_chart: &deploy_helm_chart
-  - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" helmchart/Chart.yaml'
+  - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" charts/*/Chart.yaml'
+  - '[[ "$ENABLE_DB" = "true" ]] && DB_VALUES_FILE="-f skaffold/ci/react-db-values.yaml"' 
   #- skaffold deploy
-  - helm upgrade $APPNAME helmchart --install -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait
+  - helm dependency build charts/react
+  - helm upgrade $APPNAME charts/react --install -f helm_ci_values.yaml $DB_VALUES_FILE -n $KUBE_NAMESPACE --wait
   - helm history $APPNAME -n $KUBE_NAMESPACE
-  - kubectl rollout status -w "deployment/${APPNAME}" -n $KUBE_NAMESPACE
-  - kubectl rollout status -w "deployment/${APPNAME}-tmpdb" -n $KUBE_NAMESPACE || echo 0
-  - kubectl get deploy,svc,pod -n $KUBE_NAMESPACE
+  - kubectl get all -n $KUBE_NAMESPACE -l "app.kubernetes.io/instance=${APPNAME}"
+  ## rollout status multiple resource support in 1.25 https://github.com/kubernetes/kubernetes/pull/108777
+  ## Kubernetes 1.24 only supports "deploy/${DEPLOYMENT_NAME}" and does not support "deploy -l 'selector'" as well
+  #- DEPLOYMENT=$(kubectl get deploy -n $KUBE_NAMESPACE -l "app.kubernetes.io/instance=${APPNAME}" --no-headers -o custom-columns="DEPLOY:metadata.name")
+  ## Just kinda hardcode the deploy/sts name until 1.25 for now
+  - '[[ "$ENABLE_DB" = "true" ]] && kubectl rollout status sts/${APPNAME}-db -n $KUBE_NAMESPACE -w'
+  - kubectl rollout status deploy/${APPNAME}-app -n $KUBE_NAMESPACE -w
 
 workflow:
   rules:
@@ -445,9 +463,9 @@ commit_stable:
   - echo $COMMIT_SHA
   - *exit_if_sha_matches_stable
   - sed -i "s|${CURVER}-*.*|${CURVER}-${COMMIT_SHA}|" docker-compose.yml
-  - 'sed -i "s|version:${CURCHART}|version:${CHART_VERSION}|" helmchart/Chart.yaml'
-  - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${CURVER}-${COMMIT_SHA}\"|" helmchart/Chart.yaml'
-  - git add docker-compose.yml helmchart/Chart.yaml
+  - 'sed -i "s|version: ${CURCHART}|version: ${CHART_VERSION}|" charts/*/Chart.yaml'
+  - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${CURVER}-${COMMIT_SHA}\"|" charts/*/Chart.yaml'
+  - git add docker-compose.yml charts/*/Chart.yaml
   - git config --global user.name "${GITLAB_USER_NAME}"
   - git config --global user.email "${GITLAB_USER_EMAIL}"
   - 'git commit -m "Stable: ${CURVER}-${COMMIT_SHA}" --author="GitLab Runner <gitlab-runner@${CI_SERVER_HOST}>" -s'
@@ -508,9 +526,9 @@ commit_version:
   - bash genlog.sh $RELEASE -s $CI_SERVER_URL -p $CI_PROJECT_PATH -t $CURVER -v -m mreq.json -n $NOTES
   - git add CHANGELOG.md 2>/dev/null || echo 0
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
-  - 'sed -i "s|version:${CURCHART}|version:${CHART_VERSION}|" helmchart/Chart.yaml'
-  - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${VERSION}\"|" helmchart/Chart.yaml'
-  - git add docker-compose.yml helmchart/Chart.yaml
+  - 'sed -i "s|version: ${CURCHART}|version: ${CHART_VERSION}|" charts/*/Chart.yaml'
+  - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${VERSION}\"|" charts/*/Chart.yaml'
+  - git add docker-compose.yml charts/*/Chart.yaml
   - git config --global user.name "${GITLAB_USER_NAME}"
   - git config --global user.email "${GITLAB_USER_EMAIL}"
   - 'git commit -m "Release: ${VERSION}" --author="GitLab Runner <gitlab-runner@${CI_SERVER_HOST}>" -s'

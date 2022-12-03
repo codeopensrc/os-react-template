@@ -47,20 +47,14 @@ profiles:
     helm:
       flags: *helm_flags
       releases:
-      ## TODO: DB in same helm release and not separate
-      - name: react-db
+      - name: react
         namespace: skaffold-react
         createNamespace: true
-        chartPath: helmchart
+        chartPath: charts/react
         wait: true
         valuesFiles:
-        - skaffold/docker/react-db-values.yaml
-      - name: react-template
-        namespace: skaffold-react
-        createNamespace: true
-        chartPath: helmchart
-        valuesFiles:
-        - skaffold/docker/react-template-values.yaml
+        - skaffold/remote/react-db-values.yaml
+        - skaffold/remote/react-template-values.yaml
         ## To pass in a local .env file
         #setFiles:
         #  dotEnvFile: .env
@@ -83,18 +77,13 @@ profiles:
     helm:
       flags: *helm_flags
       releases:
-      - name: react-db
+      - name: react
         namespace: skaffold-react
         createNamespace: true
-        chartPath: helmchart
+        chartPath: charts/react
         wait: true
         valuesFiles:
-         - skaffold/remote/react-db-values.yaml
-      - name: react-template
-        namespace: skaffold-react
-        createNamespace: true
-        chartPath: helmchart
-        valuesFiles:
+        - skaffold/remote/react-db-values.yaml
         - skaffold/remote/react-template-values.yaml
         ## To pass in a local .env file
         #setFiles:
@@ -117,22 +106,14 @@ profiles:
     helm:
       flags: *helm_flags
       releases:
-      - name: react-db
+      - name: react
         namespace: skaffold-react
         createNamespace: true
-        chartPath: helmchart
+        chartPath: charts/react
         wait: true
         valuesFiles:
         - skaffold/replica/react-db-values.yaml
-      - name: react-template
-        namespace: skaffold-react
-        createNamespace: true
-        chartPath: helmchart
-        valuesFiles:
         - skaffold/replica/react-template-values.yaml
-        ## To pass in a local .env file
-        #setFiles:
-        #  dotEnvFile: .env
 
 
 ### Meant for ci builds
@@ -152,20 +133,14 @@ profiles:
     helm:
       flags: *helm_flags
       releases:
-      - name: "{{.APPNAME}}-db"
+      - name: "{{.APPNAME}}"
         namespace: "{{.KUBE_NAMESPACE}}"
         createNamespace: true
-        chartPath: helmchart
+        chartPath: charts/react
         wait: true
         valuesFiles:
         ### TODO: Review value files for ci
         #- skaffold/ci/react-db-values.yaml
         ## TODO: helm_ci_values.yaml for db
-      - name: "{{.APPNAME}}"
-        namespace: "{{.KUBE_NAMESPACE}}"
-        createNamespace: true
-        chartPath: helmchart
-        valuesFiles:
-        ### TODO: Review value files for ci
         #- skaffold/ci/react-template-values.yaml
         #- helm_ci_values.yaml

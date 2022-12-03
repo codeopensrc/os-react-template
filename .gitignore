@@ -9,6 +9,7 @@ npm-debug.log
 .DS_Store
 *.swp
 *.vim
+*.tgz
 
 ignore/*
 .env

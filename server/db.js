@@ -28,7 +28,9 @@ module.exports = {
 
         serverState.registerConnection("mongo")
 
-        let mongoOpts = {}
+        let mongoOpts = {
+            connectTimeoutMS: 2000
+        }
 
         // If we're not providing a URL look for address in consul
         if(!FULL_DEV_DB_URL) {
@@ -43,7 +45,7 @@ module.exports = {
                 let connectionString = `mongodb://${addrStr}/${MONGO_DB_NAME}${replOpts}`
                 if(!addrStr) {
                     console.log("No Mongo Host found for DB.js");
-                    setTimeout(this.init.bind(this), CONSUL_RETRY_INTERVAL * ++connectionAttempts);
+                    setTimeout(this.init.bind(this, true), CONSUL_RETRY_INTERVAL * ++connectionAttempts);
                     return console.log(`Search consul cluster again in ${CONSUL_RETRY_INTERVAL * connectionAttempts}ms`);
                 }
                 this.mongoConnect(connectionString, mongoOpts)
@@ -55,9 +57,11 @@ module.exports = {
     },
 
     mongoConnect: function(connectionString, mongoOpts) {
-        mongoose.connect(connectionString,/* mongoOpts,*/ (err) => {
+        //TODO: Debug type log levels
+        //console.log("Attempting mongoose.connect..");
+        mongoose.connect(connectionString, mongoOpts, (err) => {
             if(err) {
-                setTimeout(this.init.bind(this), DB_RETRY_INTERVAL * ++connectionAttempts);
+                setTimeout(this.init.bind(this, true), DB_RETRY_INTERVAL * ++connectionAttempts);
                 console.log("mongoConnect: MongoErr", err);
                 return console.log(`Attempting Mongo connection for 30 seconds again in ${DB_RETRY_INTERVAL * connectionAttempts}ms`);
             }
