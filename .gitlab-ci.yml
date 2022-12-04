@@ -1,4 +1,5 @@
 stages:
+  - prepare
   - build
   - deploy
   - stop
@@ -8,6 +9,7 @@ stages:
   - stop_prod
 
 variables:
+  PROJECT_NODE_IMAGE: $CI_REGISTRY_IMAGE/node
   PROJECT_APP_IMAGE: $CI_REGISTRY_IMAGE/app
   TOKEN_REPO_WRITE_NAME: ci_push_token
   TOKEN_REPO_SELF_WRITE: "secret_value"
@@ -24,6 +26,7 @@ variables:
   BUILDKITD_POD: buildkitd-0
   BUILDKITD_NAMESPACE: buildkitd
   DOCKERFILE: Dockerfile
+  ENABLE_DB: "true"
 
 default:
   before_script:
@@ -43,11 +46,14 @@ default:
     {"auths":{"$CI_REGISTRY":{"auth":"$(echo -n ${CI_REGISTRY_USER}:${CI_REGISTRY_PASSWORD} | base64)"}}}
     EOF
 
-.not_protected: &not_protected
-  '$CI_COMMIT_REF_NAME != "dev" && $CI_COMMIT_REF_NAME != "master" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
+.get_node_ver: &get_node_ver
+  - FOUND_NODE_VER=$(sed -rn "s/.*NODE_VER=(.*)/\1/p" Dockerfile)
 
-.is_dev_branch: &is_dev_branch
-  '$CI_COMMIT_REF_NAME == "dev" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
+.not_protected: &not_protected
+  '$CI_COMMIT_REF_NAME != "master" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")'
+
+.is_web_node_ver_change: &is_web_node_ver_change
+  '$CI_COMMIT_REF_NAME != "master" && $CI_PIPELINE_SOURCE == "web" && $NODE_VER != ""'
 
 .is_web_master_stable: &is_web_master_stable
   '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
@@ -91,12 +97,12 @@ default:
   - '[[ $COMMIT_SHA = $RELEASE_SHA ]] && SHA_TO_BUILD=""'
   - echo $COMMIT_SHA $IMAGE_SHA $STABLE_SHA $RELEASE_SHA
 
-.create_rc: &create_rc
+.create_beta: &create_beta
   - *get_current_version
   - MAJOR_MINOR=$(echo $CURVER | cut -d "." -f 1-2)
   - PATCH=$(echo $CURVER | cut -d "." -f 3)
   - NEXT_PATCH=$(($PATCH + 1))
-  - RC=${MAJOR_MINOR}.${NEXT_PATCH}-rc
+  - BETA=${MAJOR_MINOR}.${NEXT_PATCH}-beta
 
 .create_next_version: &create_next_version
   - *get_current_version
@@ -133,14 +139,12 @@ default:
     --output type=image,\"name=${OUTPUT_IMGS}\",push=true
     --export-cache type=inline
     ${IMPORT_CACHE_ARGS}
+    ${BUILD_ARGS}
 
 .create_helm_values: &create_helm_values
   - |
     REGISTER_SERVICE="false"
-    ENABLE_DB="false"
     [[ $KUBE_NAMESPACE = "production" ]] && REGISTER_SERVICE="true"
-    ### Almost to temp ci dbs in helm
-    [[ $KUBE_NAMESPACE = "review" ]] && ENABLE_DB="true"
     cat <<EOF > helm_ci_values.yaml
     app:
       imagePullSecrets:
@@ -187,6 +191,7 @@ default:
   - '[[ "$ENABLE_DB" = "true" ]] && kubectl rollout status sts/${APPNAME}-db -n $KUBE_NAMESPACE -w'
   - kubectl rollout status deploy/${APPNAME}-app -n $KUBE_NAMESPACE -w
 
+
 workflow:
   rules:
   - if: $CI_COMMIT_TAG
@@ -195,6 +200,28 @@ workflow:
     variables:
       SKIP_WEB_DEFAULT_RUN: "true"
   - when: always
+
+
+prepare_node_image:
+  stage: prepare
+  tags:
+  - kubernetes_builder
+  variables:
+    BUILD_TARGET: base
+  script:
+  - *create_docker_json
+  - *get_node_ver
+  - "OUTPUT_IMGS=${PROJECT_NODE_IMAGE}:${FOUND_NODE_VER}"
+  - *build_image
+  rules:
+  - if: $CI_PIPELINE_SOURCE != "push" && $CI_PIPELINE_SOURCE != "web"
+    when: never
+  - if: *is_web_node_ver_change
+  - if: *not_protected
+    changes:
+      paths:
+        - Dockerfile
+      compare_to: $CI_DEFAULT_BRANCH
 
 echo_env_vars:
   stage: build
@@ -228,10 +255,18 @@ build_review:
   variables:
     BUILD_TARGET: src
     IMPORT_CACHE_ARGS: |
-      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:cache
+    BUILD_ARGS: |
+      --opt build-arg:BASE_IMAGE=${PROJECT_NODE_IMAGE}
   script:
   - *create_docker_json
-  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${CI_COMMIT_SHORT_SHA}"
+  - *get_node_ver
+  - 'BUILD_ARGS="${BUILD_ARGS} --opt build-arg:BASE_IMAGE_TAG=${FOUND_NODE_VER}"'
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_NODE_IMAGE}:${FOUND_NODE_VER}"'
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${CI_COMMIT_SHORT_SHA},${PROJECT_APP_IMAGE}:cache"
+  - *build_image
+  - BUILD_TARGET=prod
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:prod-buildtest"
   - *build_image
   rules:
   - if: $CI_PIPELINE_SOURCE != "push" && $CI_PIPELINE_SOURCE != "web"
@@ -289,82 +324,6 @@ stop_review:
 
 ########################
 ########################
-#### DEV BRANCH
-########################
-########################
-
-build_rc:
-  stage: build
-  tags:
-  - kubernetes_builder_prod
-  variables:
-    BUILD_TARGET: src
-    IMPORT_CACHE_ARGS: |
-      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
-  script:
-  - *create_docker_json
-  - *create_rc
-  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:$RC"'
-  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:dev"
-  - *build_image
-  - BUILD_TARGET=prod
-  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:$RC"
-  - *build_image
-  rules:
-  - if: *is_dev_branch
-
-deploy_rc:
-  stage: deploy
-  tags:
-  - kubernetes_prod
-  variables:
-    KUBE_NAMESPACE: dev
-  script:
-  - *create_rc
-  - echo "$KUBE_NAMESPACE"
-  - APPNAME=${SERVICE_NAME}
-  - HELM_IMAGE_TAG=${RC}
-  - KUBE_INGRESS_BASE_DOMAIN=dev.${SERVER_DOMAIN}
-  - 'URL=http://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
-  - echo "URL=${URL}" > deploy.env
-  - 'echo "APPNAME: ${APPNAME}"'
-  - 'echo "URL: ${URL}"'
-  - *apply_registry_secret
-  - *create_helm_values
-  - *deploy_helm_chart
-  artifacts:
-    reports:
-      dotenv: deploy.env 
-  environment:
-    name: dev
-    url: $URL
-    on_stop: stop_rc
-    auto_stop_in: 1 hour
-  rules:
-  - if: *is_dev_branch
-
-stop_rc:
-  stage: stop
-  tags:
-  - kubernetes_prod
-  variables:
-    KUBE_NAMESPACE: dev
-    GIT_STRATEGY: none
-  script:
-  - echo "Stop rc"
-  - echo "$KUBE_NAMESPACE"
-  - APPNAME=${SERVICE_NAME}
-  - helm uninstall $APPNAME -n $KUBE_NAMESPACE || true
-  environment:
-    name: dev
-    action: stop
-  rules:
-  - if: *is_dev_branch
-    when: manual
-
-
-########################
-########################
 #### MASTER BRANCH
 ########################
 ########################
@@ -377,12 +336,17 @@ build_beta:
   variables:
     BUILD_TARGET: prod
     IMPORT_CACHE_ARGS: |
-      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:cache
+    BUILD_ARGS: |
+      --opt build-arg:BASE_IMAGE=${PROJECT_NODE_IMAGE}
   script:
   - *create_docker_json
-  - *create_rc
-  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:$RC"'
-  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${RC}-beta"
+  - *create_beta
+  - *get_node_ver
+  - 'BUILD_ARGS="${BUILD_ARGS} --opt build-arg:BASE_IMAGE_TAG=${FOUND_NODE_VER}"'
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_NODE_IMAGE}:${FOUND_NODE_VER}"'
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${BETA}"'
+  - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${BETA}"
   - *build_image
   rules:
   - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_REF_NAME == "master"
@@ -398,10 +362,10 @@ deploy_beta:
   variables:
     KUBE_NAMESPACE: beta
   script:
-  - *create_rc
+  - *create_beta
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
-  - HELM_IMAGE_TAG=${RC}-beta
+  - HELM_IMAGE_TAG=${BETA}
   - KUBE_INGRESS_BASE_DOMAIN=beta.${SERVER_DOMAIN}
   - 'URL=https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
   - echo "URL=${URL}" > deploy.env
@@ -448,6 +412,7 @@ stop_beta:
   - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
     when: manual
 
+
 ###############################
 ###   Not Tag Commit  -  $RELEASE is not defined
 ###############################
@@ -486,18 +451,23 @@ release_stable:
   variables:
     BUILD_TARGET: prod
     IMPORT_CACHE_ARGS: |
-      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:cache
+    BUILD_ARGS: |
+      --opt build-arg:BASE_IMAGE=${PROJECT_NODE_IMAGE}
   script:
   - *create_docker_json
-  - *create_rc
+  - *create_beta
   - echo $CURVER
-  - echo $RC
+  - echo $BETA
   - *get_sha_to_build
   - echo $SHA_TO_BUILD
   ##! We update tag in docker-compose.yml cause we build it into the image for consul to get the current tag
   ##! Once we do a consul side-loaded container in helm for apps or something we can probably finally remove
   - sed -i "s|${CURVER}-*.*|${CURVER}${SHA_TO_BUILD}|" docker-compose.yml
-  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${RC}-beta"'
+  - *get_node_ver
+  - 'BUILD_ARGS="${BUILD_ARGS} --opt build-arg:BASE_IMAGE_TAG=${FOUND_NODE_VER}"'
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_NODE_IMAGE}:${FOUND_NODE_VER}"'
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${BETA}"'
   - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${CURVER}${SHA_TO_BUILD},${PROJECT_APP_IMAGE}:latest,${PROJECT_APP_IMAGE}:${CURVER}-stable"
   - *build_image
   - *trigger_deploy_prod_job
@@ -505,7 +475,6 @@ release_stable:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
     when: never
   - if: *is_web_master_stable
-
 
 
 ###############################
@@ -550,19 +519,24 @@ release_version:
   variables:
     BUILD_TARGET: prod
     IMPORT_CACHE_ARGS: |
-      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:dev
+      --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:cache
+    BUILD_ARGS: |
+      --opt build-arg:BASE_IMAGE=${PROJECT_NODE_IMAGE}
   script:
   - *create_docker_json
   - echo $RELEASE
-  - *create_rc
+  - *create_beta
   - *create_next_version
   - echo $CURVER
-  - echo $RC
+  - echo $BETA
   - echo ${VERSION}
   ##! We update tag in docker-compose.yml cause we build it into the image for consul to get the current tag
   ##! Once we do a consul side-loaded container in helm for apps or something we can probably finally remove
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
-  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${RC}-beta"'
+  - *get_node_ver
+  - 'BUILD_ARGS="${BUILD_ARGS} --opt build-arg:BASE_IMAGE_TAG=${FOUND_NODE_VER}"'
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_NODE_IMAGE}:${FOUND_NODE_VER}"'
+  - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${BETA}"'
   - 'IMPORT_CACHE_ARGS="${IMPORT_CACHE_ARGS} --import-cache type=registry,ref=${PROJECT_APP_IMAGE}:${CURVER}-stable"'
   - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:$VERSION,${PROJECT_APP_IMAGE}:latest"
   - *build_image
@@ -573,12 +547,9 @@ release_version:
   - if: *is_web_master_release
 
 
-
 ###############################
 ###   Deploy from master branch
 ###############################
-
-
 deploy_production:
   stage: deploy_prod
   tags:
@@ -616,7 +587,6 @@ deploy_production:
   - if: '$CI_PIPELINE_SOURCE == "pipeline" && $CI_COMMIT_REF_NAME == "master"'
     when: manual
 
-
 stop_production:
   stage: stop_prod
   tags:
@@ -647,5 +617,5 @@ stop_production:
   script:
   - echo "CLEAN"
   rules:
-  - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME != "dev" && $CI_COMMIT_REF_NAME != "master"'
+  - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME != "master"'
     when: manual
