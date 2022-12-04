@@ -47,7 +47,7 @@ services:
     ###############################################################
     ###############################################################
     main:
-        image: registry.codeopensrc.com/os/react-template/app:0.6.0
+        image: registry.codeopensrc.com/os/react-template/app:0.6.0-91c1c4a
         ports: ["5000:80"]
         labels: ["com.codeopensrc.consul=react"]
         build:
