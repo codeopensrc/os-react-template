@@ -128,6 +128,7 @@ default:
   - "[[ $RELEASE == 'major' ]] && CHART_VERSION=${NEXT_MAJOR_CHART}.0.0"
   - "[[ $RELEASE == 'minor' ]] && CHART_VERSION=${MAJOR_CHART}.${NEXT_MINOR_CHART}.0"
   - "[[ $RELEASE == 'patch' ]] && CHART_VERSION=${MAJOR_CHART}.${MINOR_CHART}.${NEXT_PATCH_CHART}"
+  - "[[ $RELEASE == '' ]] && CHART_VERSION=${MAJOR_CHART}.${MINOR_CHART}.${NEXT_PATCH_CHART}"
 
 ## Most likely be using skaffold + buildctl in script next
 ## TODO: Support using multiple --build-arg

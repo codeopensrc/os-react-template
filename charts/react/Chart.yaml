@@ -3,18 +3,18 @@ name: react
 description: A Helm chart for Kubernetes
 type: application
 ###! For now tieing tpl and react chart versioning together
-version: 
+version: 0.4.0
 appVersion: "0.6.0-91c1c4a"
 ## Cannot share data between dependency charts using 'import-values'
 ## Data imported only available to manifests in this charts templates/ folder
 dependencies:
 - name: tpl
-  version: 
+  version: 0.4.0
   repository: file://../tpl
   alias: app
   condition: app.enabled
 - name: tpl
-  version: 
+  version: 0.4.0
   repository: file://../tpl
   alias: db
   condition: db.enabled
