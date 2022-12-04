@@ -118,7 +118,7 @@ default:
 
 .create_next_chart_version: &create_next_chart_version
   - PROD_CHART=$(awk "/version:/{print; exit;}" charts/react/Chart.yaml)
-  - CURCHART=$(echo $PROD_CHART | cut -d ":" -f2 | cut -d "-" -f1 | sed "/^ *//")
+  - CURCHART=$(echo $PROD_CHART | cut -d ":" -f2 | cut -d "-" -f1 | sed "s/^ *//")
   - MAJOR_CHART=$(echo $CURCHART | cut -d "." -f 1)
   - MINOR_CHART=$(echo $CURCHART | cut -d "." -f 2)
   - PATCH_CHART=$(echo $CURCHART | cut -d "." -f 3)
