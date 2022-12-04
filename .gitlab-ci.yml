@@ -431,7 +431,8 @@ commit_stable:
   - sed -i "s|${CURVER}-*.*|${CURVER}-${COMMIT_SHA}|" docker-compose.yml
   - 'sed -i "s|version: ${CURCHART}|version: ${CHART_VERSION}|" charts/*/Chart.yaml'
   - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${CURVER}-${COMMIT_SHA}\"|" charts/*/Chart.yaml'
-  - git add docker-compose.yml charts/*/Chart.yaml
+  - helm dependency update charts/react
+  - git add docker-compose.yml charts/*/Chart.yaml charts/react/Chart.lock
   - git config --global user.name "${GITLAB_USER_NAME}"
   - git config --global user.email "${GITLAB_USER_EMAIL}"
   - 'git commit -m "Stable: ${CURVER}-${COMMIT_SHA}" --author="GitLab Runner <gitlab-runner@${CI_SERVER_HOST}>" -s'
@@ -498,7 +499,8 @@ commit_version:
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
   - 'sed -i "s|version: ${CURCHART}|version: ${CHART_VERSION}|" charts/*/Chart.yaml'
   - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${VERSION}\"|" charts/*/Chart.yaml'
-  - git add docker-compose.yml charts/*/Chart.yaml
+  - helm dependency update charts/react
+  - git add docker-compose.yml charts/*/Chart.yaml charts/react/Chart.lock
   - git config --global user.name "${GITLAB_USER_NAME}"
   - git config --global user.email "${GITLAB_USER_EMAIL}"
   - 'git commit -m "Release: ${VERSION}" --author="GitLab Runner <gitlab-runner@${CI_SERVER_HOST}>" -s'
