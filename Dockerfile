@@ -1,9 +1,9 @@
 ARG BASE_IMAGE=alpine
-ARG BASE_IMAGE_TAG=3.14
+ARG BASE_IMAGE_TAG=3.17
 
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG} AS base
 WORKDIR /home/app
-ARG NODE_VER=14.20.1-r0
+ARG NODE_VER=18.12.1-r0
 RUN apk add --no-cache \
     nodejs=${NODE_VER} \
     curl \
@@ -13,14 +13,14 @@ RUN apk add --no-cache \
 FROM base AS src
 HEALTHCHECK --interval=5s --timeout=2s --start-period=5s \
     CMD exit $(curl -sS http://localhost/healthcheck; echo $?)
-ARG NPM_VER=7.17.0-r0
+ARG NPM_VER=9.1.2-r0
 ARG PM2_VER=5.1.1
 RUN apk add --no-cache npm=${NPM_VER} && rm -rf /var/cache/apk/* \
-    && npm install -g pm2@${PM2_VER} --only=prod --no-optional --no-package-lock
+    && npm install -g pm2@${PM2_VER} --omit=dev --omit=optional --no-package-lock
 COPY package.json /home/app/package.json
-RUN npm install --only=prod --no-optional --no-package-lock \
+RUN npm install --omit=dev --omit=optional --no-package-lock \
     && cp -R node_modules prod_mods \
-    && npm install --no-optional
+    && npm install --omit=optional
 COPY src /home/app/src
 RUN mkdir -p /home/app/pub \
     && cp src/html/* /home/app/pub/ \

@@ -26,9 +26,9 @@
 ## Have not tested building/deploying from remote/automated env
 
 BASE_IMAGE=alpine
-BASE_IMAGE_TAG=3.14
-NODE_VER=14.20.1-r0
-NPM_VER=7.17.0-r0
+BASE_IMAGE_TAG=3.17
+NODE_VER=18.12.1-r0
+NPM_VER=9.1.2-r0
 PM2_VER=5.1.1
 
 BUILDKIT_POD_NAME=buildkitd-0

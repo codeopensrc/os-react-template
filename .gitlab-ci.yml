@@ -224,7 +224,6 @@ prepare_node_image:
     changes:
       paths:
         - Dockerfile
-      compare_to: $CI_DEFAULT_BRANCH
 
 echo_env_vars:
   stage: build
