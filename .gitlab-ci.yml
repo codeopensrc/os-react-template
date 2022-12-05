@@ -13,6 +13,8 @@ variables:
   PROJECT_APP_IMAGE: $CI_REGISTRY_IMAGE/app
   TOKEN_REPO_WRITE_NAME: ci_push_token
   TOKEN_REPO_SELF_WRITE: "secret_value"
+  TOKEN_REGISTRY_READ_NAME: ci_registry_read_token
+  TOKEN_REGISTRY_SELF_READ: "secret_value"
   TOKEN_API_SNIPPET_WRITE: "secret_value"
   SERVICE_NAME: ${CI_PROJECT_NAME}
   SUBDOMAIN: react
@@ -36,8 +38,8 @@ default:
 .apply_registry_secret: &apply_registry_secret
   - kubectl delete secret -n $KUBE_NAMESPACE gitlab-registry || true
   - kubectl create secret -n $KUBE_NAMESPACE docker-registry gitlab-registry
-    --docker-server="$CI_REGISTRY" --docker-username="$CI_REGISTRY_USER"
-    --docker-password="$CI_REGISTRY_PASSWORD" -o yaml --dry-run=client | kubectl apply -n $KUBE_NAMESPACE -f -
+    --docker-server="$CI_REGISTRY" --docker-username="$TOKEN_REGISTRY_READ_NAME"
+    --docker-password="$TOKEN_REGISTRY_SELF_READ" -o yaml --dry-run=client | kubectl apply -n $KUBE_NAMESPACE -f -
 
 .create_docker_json: &create_docker_json
   - |
