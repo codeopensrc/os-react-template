@@ -1,4 +1,11 @@
 
+# 0.8.0 - (*2022-12-05*)
+
+#### **Changed (1)**
+- [ [b0d6d92](https://gitlab.codeopensrc.com/os/react-template/-/commit/b0d6d92) ] **`changed`** - Update alpine, node, and npm  
+
+<br><br><br>
+
 # 0.7.0 - (*2022-12-04*)
 
 #### **Added (2)**
