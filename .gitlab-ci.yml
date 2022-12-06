@@ -58,10 +58,10 @@ default:
   '$CI_COMMIT_REF_NAME != "master" && $CI_PIPELINE_SOURCE == "web" && $NODE_VER != ""'
 
 .is_web_master_stable: &is_web_master_stable
-  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
+  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == "stable"'
 
 .is_web_master_release: &is_web_master_release
-  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE != null'
+  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && ($RELEASE != null && $RELEASE != "stable")'
 
 .trigger_deploy_prod_job: &trigger_deploy_prod_job
   - curl -X POST --form "variables[SKIP_BETA]=$SKIP_BETA"
@@ -442,7 +442,7 @@ commit_stable:
   rules:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
     when: never
-  - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == null'
+  - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == "stable"'
     when: on_success
   - if: *is_web_master_stable
     when: manual
@@ -511,7 +511,7 @@ commit_version:
   rules:
   - if: '$SKIP_WEB_DEFAULT_RUN == "true"'
     when: never
-  - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE != null'
+  - if: '$SKIP_BETA == "true" && $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && ($RELEASE != null && $RELEASE != "stable")'
     when: on_success
   - if: *is_web_master_release
     when: manual
