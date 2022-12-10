@@ -1,6 +1,6 @@
 apiVersion: v2
 name: tpl
-description: A Helm chart for Kubernetes
+description: Template helm chart for bootstrapping apps
 type: application
 ###! Manually update when ONLY updating chart/subcharts/chart dependencies
 ###! Otherwise it is updated in ci when appVersion gets an update

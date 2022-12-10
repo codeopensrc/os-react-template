@@ -130,7 +130,7 @@ default:
   - "[[ $RELEASE == 'major' ]] && CHART_VERSION=${NEXT_MAJOR_CHART}.0.0"
   - "[[ $RELEASE == 'minor' ]] && CHART_VERSION=${MAJOR_CHART}.${NEXT_MINOR_CHART}.0"
   - "[[ $RELEASE == 'patch' ]] && CHART_VERSION=${MAJOR_CHART}.${MINOR_CHART}.${NEXT_PATCH_CHART}"
-  - "[[ $RELEASE == '' ]] && CHART_VERSION=${MAJOR_CHART}.${MINOR_CHART}.${NEXT_PATCH_CHART}"
+  - "[[ $RELEASE == 'stable' ]] && CHART_VERSION=${MAJOR_CHART}.${MINOR_CHART}.${NEXT_PATCH_CHART}"
 
 ## Most likely be using skaffold + buildctl in script next
 ## TODO: Support using multiple --build-arg
@@ -194,6 +194,22 @@ default:
   - '[[ "$ENABLE_DB" = "true" ]] && kubectl rollout status sts/${APPNAME}-db -n $KUBE_NAMESPACE -w'
   - kubectl rollout status deploy/${APPNAME}-app -n $KUBE_NAMESPACE -w
 
+.publish_helm_charts: &publish_helm_charts
+  - helm package charts/tpl
+  - curl -sS -X POST -F "chart=@tpl-${CHART_VERSION}.tgz"
+    --user gitlab-ci-token:$CI_JOB_TOKEN
+    ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts
+  - 'sed -i "s| repository: file| #repository: file|" charts/react/Chart.yaml'
+  - 'sed -i "s| #repository: https| repository: https|" charts/react/Chart.yaml'
+  - helm package -u charts/react
+  - curl -sS -X POST -F "chart=@react-${CHART_VERSION}.tgz"
+    --user gitlab-ci-token:$CI_JOB_TOKEN
+    ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts
+  ## To use
+  #helm repo add os ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/stable
+  #helm upgrade --install my-helm-release os/tpl
+  # or
+  #helm upgrade --install my-helm-release os/react
 
 workflow:
   rules:
@@ -434,6 +450,9 @@ commit_stable:
   - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${CURVER}-${COMMIT_SHA}\"|" charts/*/Chart.yaml'
   - helm dependency update charts/react
   - git add docker-compose.yml charts/*/Chart.yaml charts/react/Chart.lock
+  ## publish important after 'git add' as publish updates Chart.lock to use remote helm repo
+  ##  which we dont want in vcs but do want when packaging it up for external use
+  - *publish_helm_charts
   - git config --global user.name "${GITLAB_USER_NAME}"
   - git config --global user.email "${GITLAB_USER_EMAIL}"
   - 'git commit -m "Stable: ${CURVER}-${COMMIT_SHA}" --author="GitLab Runner <gitlab-runner@${CI_SERVER_HOST}>" -s'
@@ -502,6 +521,9 @@ commit_version:
   - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${VERSION}\"|" charts/*/Chart.yaml'
   - helm dependency update charts/react
   - git add docker-compose.yml charts/*/Chart.yaml charts/react/Chart.lock
+  ## publish important after 'git add' as publish updates Chart.lock to use remote helm repo
+  ##  which we dont want in vcs but do want when packaging it up for external use
+  - *publish_helm_charts
   - git config --global user.name "${GITLAB_USER_NAME}"
   - git config --global user.email "${GITLAB_USER_EMAIL}"
   - 'git commit -m "Release: ${VERSION}" --author="GitLab Runner <gitlab-runner@${CI_SERVER_HOST}>" -s'

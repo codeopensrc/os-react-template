@@ -78,7 +78,7 @@ if [[ -z $IMAGE ]]; then
     echo "  ./build.sh [docker|buildx|ctl|remote_buildx] -t TAG";
     exit 1
 fi
-CACHE_FROM_IMAGE=${IMAGE//:*/:dev}
+CACHE_FROM_IMAGE=${IMAGE//:*/:cache}
 
 echo "BUILDER OPTION: $BUILD_OPT"
 echo "DOCKERFILE: $DOCKERFILE"
