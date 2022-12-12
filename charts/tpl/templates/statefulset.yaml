@@ -47,7 +47,7 @@ spec:
   serviceName: {{ include "react-template.fullname" . }}
   podManagementPolicy: {{ default "OrderedReady" .Values.statefulSetPodManagementPolicy }}
   {{- if semverCompare ">=1.23-0" .Capabilities.KubeVersion.GitVersion }}
-  minReadySeconds: 3
+  minReadySeconds: {{ default 3 .Values.stsMinReadySeconds }}
   {{- end }}
   template:
     metadata:

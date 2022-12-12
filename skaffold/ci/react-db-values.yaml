@@ -1,4 +1,3 @@
-### TODO: Review for ci
 db:
   enabled: true
   replicaCount: 1
@@ -26,5 +25,3 @@ db:
   volumeClaimMounts:
     - mountPath: /data/db
       subPath: db
-  secretStringData:
-    MONGO_INITDB_DATABASE: mongo

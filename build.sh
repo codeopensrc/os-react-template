@@ -3,7 +3,7 @@
 ###! This build script is 99% intended to be used with skaffold.
 ###! To build and push as a standalone MANUAL_BUILD_IMAGE must be defined.
 ###! You must also supply the tag when running using '-t TAG'
-#MANUAL_BUILD_IMAGE=YOUR_IMAGE_WITHOUT_TAG
+#MANUAL_BUILD_IMAGE=${IMAGE_REPO}
 
 ### NOTE: A common issue is after the build for one reason or another the image
 ###  is not loaded or pushed to the registry then attempting to build again.
@@ -25,15 +25,10 @@
 
 ## Have not tested building/deploying from remote/automated env
 
-BASE_IMAGE=alpine
-BASE_IMAGE_TAG=3.17
-NODE_VER=18.12.1-r0
-NPM_VER=9.1.2-r0
-PM2_VER=5.1.1
-
 BUILDKIT_POD_NAME=buildkitd-0
 BUILDKIT_POD_NAMESPACE=buildkitd
 
+BUILD_BASE=base
 BUILD_TARGET=src
 DOCKERFILE=Dockerfile
 
@@ -47,7 +42,21 @@ while test $# -gt 0; do
                 echo "Empty Dockerfile specified"; exit 1;
             fi
             shift;;
-        src|prod)
+        -b) shift;
+            if [[ -n $1 ]]; then
+                BUILD_BASE=$1;
+            else
+                echo "Build base not specified"; exit 1;
+            fi
+            shift;;
+        -r) shift;
+            if [[ -n $1 ]]; then
+                CI_REGISTRY=$1;
+            else
+                echo "CI Registry not specified"; exit 1;
+            fi
+            shift;;
+        base|src|prod)
             BUILD_TARGET=$1
             shift;;
         docker|buildx|ctl|remote_buildx)
@@ -82,8 +91,10 @@ CACHE_FROM_IMAGE=${IMAGE//:*/:cache}
 
 echo "BUILDER OPTION: $BUILD_OPT"
 echo "DOCKERFILE: $DOCKERFILE"
+echo "BUILD_BASE: $BUILD_BASE"
 echo "BUILD_TARGET: $BUILD_TARGET"
 echo "BUILD_CONTEXT: $BUILD_CONTEXT"
+echo "CI_REGISTRY: $CI_REGISTRY"
 echo "IMAGE: $IMAGE"
 
 
@@ -108,13 +119,12 @@ if [[ $BUILD_OPT == "docker" ]]; then
         echo "Uncomment local.push in skaffold to build locally + deploy to remote"
         exit 1
     fi
+    if [[ -n $CI_REGISTRY ]]; then
+        CI_REGISTRY_OPT="--build-arg=CI_BASE_REGISTRY=$CI_REGISTRY"
+    fi
 
     docker build \
-      --build-arg=BASE_IMAGE=$BASE_IMAGE \
-      --build-arg=BASE_IMAGE_TAG=$BASE_IMAGE_TAG \
-      --build-arg=NODE_VER=$NODE_VER  \
-      --build-arg=NPM_VER=$NPM_VER    \
-      --build-arg=PM2_VER=$PM2_VER    \
+      --build-arg=BUILD_BASE=$BUILD_BASE ${CI_REGISTRY_OPT} \
       --target=${BUILD_TARGET} \
       -f ${DOCKERFILE} \
       -t $IMAGE \
@@ -138,12 +148,11 @@ if [[ $BUILD_OPT == "buildx" ]]; then
         echo "Uncomment local.push in skaffold to build locally + deploy to remote"
         exit 1
     fi
+    if [[ -n $CI_REGISTRY ]]; then
+        CI_REGISTRY_OPT="--build-arg=CI_BASE_REGISTRY=$CI_REGISTRY"
+    fi
     docker buildx build \
-      --build-arg=BASE_IMAGE=$BASE_IMAGE \
-      --build-arg=BASE_IMAGE_TAG=$BASE_IMAGE_TAG \
-      --build-arg=NODE_VER=$NODE_VER  \
-      --build-arg=NPM_VER=$NPM_VER    \
-      --build-arg=PM2_VER=$PM2_VER    \
+      --build-arg=BUILD_BASE=$BUILD_BASE ${CI_REGISTRY_OPT} \
       --target=${BUILD_TARGET} \
       -f ${DOCKERFILE} \
       $PUSH_IMAGE_OPT -t $IMAGE \
@@ -172,17 +181,16 @@ if [[ $BUILD_OPT == "ctl" ]]; then
         echo "Use 'build.sh remote_buildx' to use buildx and launch a remote builder" 
         exit 1
     fi
+    if [[ -n $CI_REGISTRY ]]; then
+        CI_REGISTRY_OPT="--opt build-arg:CI_BASE_REGISTRY=$CI_REGISTRY"
+    fi
     buildctl \
       --addr kube-pod://${BUILDKIT_POD_NAME}?namespace=${BUILDKIT_POD_NAMESPACE} \
       build \
       --frontend dockerfile.v0 \
       --local dockerfile=$BUILD_CONTEXT \
       --local context=$BUILD_CONTEXT \
-      --opt build-arg:BASE_IMAGE=$BASE_IMAGE \
-      --opt build-arg:BASE_IMAGE_TAG=$BASE_IMAGE_TAG \
-      --opt build-arg:NODE_VER=$NODE_VER  \
-      --opt build-arg:NPM_VER=$NPM_VER    \
-      --opt build-arg:PM2_VER=$PM2_VER    \
+      --opt build-arg:BUILD_BASE=$BUILD_BASE ${CI_REGISTRY_OPT} \
       --opt filename=./${DOCKERFILE} \
       --opt target=${BUILD_TARGET} \
       --import-cache type=registry,ref=${CACHE_FROM_IMAGE} \
@@ -223,15 +231,14 @@ if [[ $BUILD_OPT == "remote_buildx" ]]; then
           --driver-opt=namespace=$REMOTE_BUILDX_BUILDER_NAMESPACE \
           --use
     fi
+    if [[ -n $CI_REGISTRY ]]; then
+        CI_REGISTRY_OPT="--build-arg=CI_BASE_REGISTRY=$CI_REGISTRY"
+    fi
 
     echo "== Builder 'buildkitd' ready"
     docker buildx build \
       --builder $REMOTE_BUILDX_BUILDER_NAME \
-      --build-arg=BASE_IMAGE=$BASE_IMAGE \
-      --build-arg=BASE_IMAGE_TAG=$BASE_IMAGE_TAG \
-      --build-arg=NODE_VER=$NODE_VER  \
-      --build-arg=NPM_VER=$NPM_VER    \
-      --build-arg=PM2_VER=$PM2_VER    \
+      --build-arg=BUILD_BASE=$BUILD_BASE ${CI_REGISTRY_OPT} \
       --target=${BUILD_TARGET}        \
       -f ${DOCKERFILE} \
       --cache-from type=registry,ref=${CACHE_FROM_IMAGE} \

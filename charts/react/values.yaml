@@ -1,7 +1,7 @@
 app:
   enabled: true
   secretStringData:
-    MONGO_DB_NAME: "react"
+    MONGO_DB_NAME: "mongo"
     SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
   configMapData:
     CONSUL_SERVICE_NAME:     "react"

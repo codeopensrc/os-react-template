@@ -111,9 +111,14 @@ containerProbe: &containerProbe
 useStatefulSet: &useStatefulSet false
 statefulSetPodManagementPolicy: &statefulSetPodManagementPolicy ""
 
+deployMinReadySeconds: &deployMinReadySeconds 3
+stsMinReadySeconds: &stsMinReadySeconds 3
+
 job: &job
   enabled: false
+  #ttlSecondsAfterFinished: 120
   annotations:
+    # post-install runs after all resources in "ready" state
     "helm.sh/hook": "post-install"
   image:
     repository: busybox
@@ -201,7 +206,7 @@ additionalContainers: &additionalContainers []
 ## Can pass in .env using `--set-file dotEnvFile=.env`
 dotEnvFile: &dotEnvFile ""
 
-secretStringData: &secretStringData
+secretStringData: &secretStringData {}
 #  MONGO_DB_NAME: "react"
 #  SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
 
@@ -286,6 +291,8 @@ template: &template
   containerProbe: *containerProbe
   useStatefulSet: *useStatefulSet
   statefulSetPodManagementPolicy: *statefulSetPodManagementPolicy
+  deployMinReadySeconds: &deployMinReadySeconds
+  stsMinReadySeconds: &stsMinReadySeconds
   job: *job
   persistence: *persistence
   volumeClaimMounts: *volumeClaimMounts

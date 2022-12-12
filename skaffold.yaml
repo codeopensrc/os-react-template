@@ -54,8 +54,8 @@ profiles:
         chartPath: charts/react
         wait: true
         valuesFiles:
-        - skaffold/remote/react-db-values.yaml
-        - skaffold/remote/react-template-values.yaml
+        - skaffold/docker/react-db-values.yaml
+        - skaffold/docker/react-template-values.yaml
         ## To pass in a local .env file
         #setFiles:
         #  dotEnvFile: .env
@@ -111,37 +111,35 @@ profiles:
         namespace: skaffold-react
         createNamespace: true
         chartPath: charts/react
-        wait: true
         valuesFiles:
         - skaffold/replica/react-db-values.yaml
         - skaffold/replica/react-template-values.yaml
 
 
-### Meant for ci builds
-### WIP
+### For ci builds
 - name: ci
   build:
     local:
       push: true
     artifacts:
-      ### TODO: CUSTOM REGISTRY
-      ### Might have to sed this...
-      - image: registry.codeopensrc.com/os/react-template/app
+      ##! Pass '--default-repo registry/path' to skaffold to use custom registry
+      - image: app
         context: .
         custom:
-          buildCommand: ./build.sh ctl prod
+          ##! Illustrating -r REGISTRY to pass custom registry
+          buildCommand: ./build.sh ctl prod -b ci -r ${CI_REGISTRY}
   deploy:
     helm:
       flags: *helm_flags
       releases:
       - name: "{{.APPNAME}}"
         namespace: "{{.KUBE_NAMESPACE}}"
-        createNamespace: true
         chartPath: charts/react
         wait: true
         valuesFiles:
-        ### TODO: Review value files for ci
-        #- skaffold/ci/react-db-values.yaml
-        ## TODO: helm_ci_values.yaml for db
-        #- skaffold/ci/react-template-values.yaml
-        #- helm_ci_values.yaml
+        - skaffold/ci/react-db-values.yaml
+        - skaffold/ci/react-template-values.yaml
+        - helm_ci_values.yaml
+        setValueTemplates:
+          app.image.repository: "{{.IMAGE_REPO}}"
+          app.image.tag: "{{.IMAGE_TAG}}@{{.IMAGE_DIGEST}}"

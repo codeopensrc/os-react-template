@@ -42,7 +42,7 @@ spec:
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   {{- if semverCompare ">=1.23-0" .Capabilities.KubeVersion.GitVersion }}
-  minReadySeconds: 3
+  minReadySeconds: {{ default 3 .Values.deployMinReadySeconds }}
   {{- end }}
   strategy:
     type: RollingUpdate
