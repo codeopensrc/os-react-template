@@ -19,12 +19,14 @@ const OUTPUT_FILES = process.env.OUTPUT_FILES || "./server/output";
 const DEV_ENV = process.env.DEV_ENV === "true"
 const REGISTER_SERVICE = process.env.REGISTER_SERVICE === "true";
 const CONSUL_SERVICE_NAME = process.env.CONSUL_SERVICE_NAME || "react-template"
-const SERVE_FROM_PUB_DIR = ["404.html", "favicon.ico", "app.bundle.js", "index.html", "assets"] 
+const CONSUL_HOST = process.env.CONSUL_HOST || "172.17.0.1"
+const SERVE_FROM_PUB_DIR = ["404.html", "favicon.ico", "app.bundle.js", "index.html", "assets"]
 
 service.setConfig({
     register: REGISTER_SERVICE,
     devEvn: DEV_ENV,
-    serviceName: CONSUL_SERVICE_NAME
+    serviceName: CONSUL_SERVICE_NAME,
+    consulHost: CONSUL_HOST
 })
 
 serverState.registerConnection("http")
@@ -79,7 +81,7 @@ const server = {
                 ".datagz": { mime: "text/javascript", encoding: "utf8" },
                 ".memgz": { mime: "text/javascript", encoding: "utf8" },
                 ".jsgz": { mime: "text/javascript", encoding: "utf8" },
-                ".json": { mime: "text/javascript", encoding: "utf8" },
+                ".json": { mime: "application/json", encoding: "utf8" },
                 ".js": { mime: "text/javascript", encoding: "utf8" },
                 ".gz": { mime: "application/gzip", encoding: null },
                 ".ico": { mime: "image/x-icon", encoding: null },

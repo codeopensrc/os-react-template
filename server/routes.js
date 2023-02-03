@@ -11,6 +11,7 @@ const routes = function (req, res) {
 
     const respond = (response) => {
         response = response || "";
+        typeof(response) == "object" && res.setHeader("Content-Type", "application/json");
         res.writeHead(200, {'Access-Control-Allow-Origin' : '*'} );
         "err" === response && res.end("err") // TODO: We should really send a more explicit msg in future
         "err" !== response && res.end(JSON.stringify(response));

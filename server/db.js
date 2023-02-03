@@ -89,7 +89,7 @@ module.exports = {
         serverState.registerSigHandler(this.db, "mongo", false)
     },
 
-    resWithErr: function(err, db, res) {
+    resWithErr: function(err, res) {
         console.error(err);
         res.writeHead(500, {'Access-Control-Allow-Origin' : '*'} );
         res.end(JSON.stringify({status: "Error"}));
