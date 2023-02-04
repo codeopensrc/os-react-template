@@ -169,6 +169,7 @@ default:
         ENABLE_DB:            "${ENABLE_DB}"
         DEV_DATABASE_URL_ORIGIN: "mongodb://${APPNAME}-db:27017"
     db:
+      enabled: $ENABLE_DB
       ciLabels:
         app: "${APPNAME}"
         env: "${CI_ENVIRONMENT_SLUG}"
@@ -190,9 +191,8 @@ default:
 
 .deploy_helm_chart: &deploy_helm_chart
   - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" charts/*/Chart.yaml'
-  - '[[ "$ENABLE_DB" = "true" ]] && DB_VALUES_FILE="-f skaffold/ci/react-db-values.yaml"' 
   - helm dependency build charts/react
-  - helm upgrade $APPNAME charts/react --install -f helm_ci_values.yaml $DB_VALUES_FILE -n $KUBE_NAMESPACE --wait
+  - helm upgrade $APPNAME charts/react --install -f skaffold/ci-values.yaml -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait
   - helm history $APPNAME -n $KUBE_NAMESPACE
   - kubectl get all -n $KUBE_NAMESPACE -l "app.kubernetes.io/instance=${APPNAME}"
   ## rollout status multiple resource support in 1.25 https://github.com/kubernetes/kubernetes/pull/108777
