@@ -23,8 +23,6 @@
 ##!   local:
 ##!     push: true
 
-## Have not tested building/deploying from remote/automated env
-
 BUILDKIT_POD_NAME=buildkitd-0
 BUILDKIT_POD_NAMESPACE=buildkitd
 

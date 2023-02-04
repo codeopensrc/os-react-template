@@ -1,6 +1,0 @@
-## skaffold helm deploy requires the image key
-app:
-  enabled: true
-  image:
-    pullPolicy: Always
-  replicaCount: 1

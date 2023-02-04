@@ -54,8 +54,7 @@ profiles:
         chartPath: charts/react
         wait: true
         valuesFiles:
-        - skaffold/docker/react-db-values.yaml
-        - skaffold/docker/react-template-values.yaml
+        - skaffold/docker-values.yaml
         ## To pass in a local .env file
         #setFiles:
         #  dotEnvFile: .env
@@ -84,8 +83,7 @@ profiles:
         chartPath: charts/react
         wait: true
         valuesFiles:
-        - skaffold/remote/react-db-values.yaml
-        - skaffold/remote/react-template-values.yaml
+        - skaffold/remote-values.yaml
         ## To pass in a local .env file
         #setFiles:
         #  dotEnvFile: .env
@@ -112,8 +110,7 @@ profiles:
         createNamespace: true
         chartPath: charts/react
         valuesFiles:
-        - skaffold/replica/react-db-values.yaml
-        - skaffold/replica/react-template-values.yaml
+        - skaffold/replica-values.yaml
 
 
 ### For ci builds
@@ -137,8 +134,7 @@ profiles:
         chartPath: charts/react
         wait: true
         valuesFiles:
-        - skaffold/ci/react-db-values.yaml
-        - skaffold/ci/react-template-values.yaml
+        - skaffold/ci-values.yaml
         - helm_ci_values.yaml
         setValueTemplates:
           app.image.repository: "{{.IMAGE_REPO}}"
