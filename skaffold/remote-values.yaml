@@ -1,9 +1,8 @@
 ## skaffold helm deploy requires the image key
-## IfNotPresent is also important incase we dont push the image
 app:
   enabled: true
   image:
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicaCount: 1
   service:
     ports:
