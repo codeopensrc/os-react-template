@@ -17,6 +17,7 @@ variables:
   TOKEN_REGISTRY_SELF_READ: "secret_value"
   TOKEN_API_SNIPPET_WRITE: "secret_value"
   SERVICE_NAME: ${CI_PROJECT_NAME}
+  APP_CHART_DIR: charts/react
   SUBDOMAIN: react
   AUTH_URL: ""
   MONGO_DB_NAME: citmp
@@ -122,7 +123,7 @@ default:
   - "[[ $RELEASE == 'patch' ]] && VERSION=${MAJOR}.${MINOR}.${NEXT_PATCH}"
 
 .create_next_chart_version: &create_next_chart_version
-  - PROD_CHART=$(awk "/version:/{print; exit;}" charts/react/Chart.yaml)
+  - PROD_CHART=$(awk "/version:/{print; exit;}" ${APP_CHART_DIR}/Chart.yaml)
   - CURCHART=$(echo $PROD_CHART | cut -d ":" -f2 | cut -d "-" -f1 | sed "s/^ *//")
   - MAJOR_CHART=$(echo $CURCHART | cut -d "." -f 1)
   - MINOR_CHART=$(echo $CURCHART | cut -d "." -f 2)
@@ -187,8 +188,8 @@ default:
 ###! 'helm repo add' necessary in helm v4 for 'repository: https' dependency charts
 ###! https://github.com/helm/helm/issues/8036
 .add_helm_repos: &add_helm_repos
-  - CHART_NAMES=( $(grep name ./charts/react/Chart.lock | awk '{print $3}') )
-  - CHART_URLS=( $(grep repository ./charts/react/Chart.lock | awk '{print $2}') )
+  - CHART_NAMES=( $(grep name ./${APP_CHART_DIR}/Chart.lock | awk '{print $3}') )
+  - CHART_URLS=( $(grep repository ./${APP_CHART_DIR}/Chart.lock | awk '{print $2}') )
   - for ind in "${!CHART_NAMES[@]}"; do helm repo add "${CHART_NAMES[$ind]}" "${CHART_URLS[$ind]}"; done
 
 ## Thinking skaffold for review/deployment/integration of multiple apps 
@@ -204,8 +205,8 @@ default:
 .deploy_helm_chart: &deploy_helm_chart
   - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" charts/*/Chart.yaml'
   #- *add_helm_repos
-  - helm dependency build charts/react
-  - helm upgrade $APPNAME charts/react --install -f skaffold/ci-values.yaml -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait
+  - helm dependency build ${APP_CHART_DIR}
+  - helm upgrade $APPNAME ${APP_CHART_DIR} --install -f skaffold/ci-values.yaml -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait
   - helm history $APPNAME -n $KUBE_NAMESPACE
   - kubectl get all -n $KUBE_NAMESPACE -l "app.kubernetes.io/instance=${APPNAME}"
   ## rollout status multiple resource support in 1.25 https://github.com/kubernetes/kubernetes/pull/108777
@@ -220,9 +221,9 @@ default:
   - curl -sS -X POST -F "chart=@tpl-${CHART_VERSION}.tgz"
     --user gitlab-ci-token:$CI_JOB_TOKEN
     ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts
-  - 'sed -i "s| repository: file| #repository: file|" charts/react/Chart.yaml'
-  - 'sed -i "s| #repository: https| repository: https|" charts/react/Chart.yaml'
-  - helm package -u charts/react
+  - 'sed -i "s| repository: file| #repository: file|" ${APP_CHART_DIR}/Chart.yaml'
+  - 'sed -i "s| #repository: https| repository: https|" ${APP_CHART_DIR}/Chart.yaml'
+  - helm package -u ${APP_CHART_DIR}
   - curl -sS -X POST -F "chart=@react-${CHART_VERSION}.tgz"
     --user gitlab-ci-token:$CI_JOB_TOKEN
     ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts
@@ -450,8 +451,8 @@ commit_stable:
   - sed -i "s|${CURVER}-*.*|${CURVER}-${COMMIT_SHA}|" docker-compose.yml
   - 'sed -i "s|version: ${CURCHART}|version: ${CHART_VERSION}|" charts/*/Chart.yaml'
   - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${CURVER}-${COMMIT_SHA}\"|" charts/*/Chart.yaml'
-  - helm dependency update charts/react
-  - git add docker-compose.yml charts/*/Chart.yaml charts/react/Chart.lock
+  - helm dependency update ${APP_CHART_DIR}
+  - git add docker-compose.yml charts/*/Chart.yaml ${APP_CHART_DIR}/Chart.lock
   ## publish important after 'git add' as publish updates Chart.lock to use remote helm repo
   ##  which we dont want in vcs but do want when packaging it up for external use
   - *publish_helm_charts
@@ -512,8 +513,8 @@ commit_version:
   - sed -i "s|${CURVER}-*.*|${VERSION}|" docker-compose.yml
   - 'sed -i "s|version: ${CURCHART}|version: ${CHART_VERSION}|" charts/*/Chart.yaml'
   - 'sed -i "s|appVersion: \"${CURVER}-*.*\"|appVersion: \"${VERSION}\"|" charts/*/Chart.yaml'
-  - helm dependency update charts/react
-  - git add docker-compose.yml charts/*/Chart.yaml charts/react/Chart.lock
+  - helm dependency update ${APP_CHART_DIR}
+  - git add docker-compose.yml charts/*/Chart.yaml ${APP_CHART_DIR}/Chart.lock
   ## publish important after 'git add' as publish updates Chart.lock to use remote helm repo
   ##  which we dont want in vcs but do want when packaging it up for external use
   - *publish_helm_charts
@@ -570,7 +571,7 @@ deploy_production:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   ## Need HELM_IMAGE_TAG for 'image.tag' otherwise it falls back to 'tpl' chart's appVersion
-  - HELM_IMAGE_TAG=$(grep ^appVersion ./charts/website/Chart.yaml | awk '{print $2}' | tr -d '"')
+  - HELM_IMAGE_TAG=$(grep ^appVersion ./${APP_CHART_DIR}/Chart.yaml | awk '{print $2}' | tr -d '"')
   - 'URL=https://${SUBDOMAIN}.${SERVER_DOMAIN}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
