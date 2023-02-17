@@ -1,4 +1,15 @@
 
+# 0.9.0 - (*2023-02-17*)
+
+#### **Added (1)**
+- [ [c211a33](https://gitlab.codeopensrc.com/os/react-template/-/commit/c211a33) ] **`added, changed, removed`** - Refactor consul code [#11](https://gitlab.codeopensrc.com/os/react-template/-/issues/11)  
+
+#### **Changed (2)**
+- [ [468a228](https://gitlab.codeopensrc.com/os/react-template/-/commit/468a228) ] **`changed`** - Change "stable" ci allowing beta only web run  
+- [ [a908b20](https://gitlab.codeopensrc.com/os/react-template/-/commit/a908b20) ] **`changed,removed,added`** - Use skaffold in ci [#3](https://gitlab.codeopensrc.com/os/react-template/-/issues/3)  
+
+<br><br><br>
+
 # 0.8.0 - (*2022-12-05*)
 
 #### **Changed (1)**
