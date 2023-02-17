@@ -8,26 +8,19 @@ const path = require("path");
 const qs = require('querystring');
 const zlib = require("zlib")
 const crypto = require("crypto")
-const { service } = require("os-npm-util");
 const routes = require("./routes.js");
 const serverState = require("./serverState.js");
+const consul = require("./consul.js");
 
 const BIN = process.env.BIN || "./server/bin";
 const PUB_FILES = process.env.PUB_FILES || "./pub";
 const STATIC_FILES = process.env.STATIC_FILES || "./server/static";
 const OUTPUT_FILES = process.env.OUTPUT_FILES || "./server/output";
 const DEV_ENV = process.env.DEV_ENV === "true"
-const REGISTER_SERVICE = process.env.REGISTER_SERVICE === "true";
-const CONSUL_SERVICE_NAME = process.env.CONSUL_SERVICE_NAME || "react-template"
-const CONSUL_HOST = process.env.CONSUL_HOST || "172.17.0.1"
+const REGISTER_CHECK = process.env.REGISTER_CHECK === "true";
 const SERVE_FROM_PUB_DIR = ["404.html", "favicon.ico", "app.bundle.js", "index.html", "assets"]
+const IMAGE_TAG = process.env.IMAGE_TAG || "dev"
 
-service.setConfig({
-    register: REGISTER_SERVICE,
-    devEvn: DEV_ENV,
-    serviceName: CONSUL_SERVICE_NAME,
-    consulHost: CONSUL_HOST
-})
 
 serverState.registerConnection("http")
 
@@ -52,8 +45,8 @@ const server = {
             ? https.createServer(options, this.serverListener.bind(this))
             : http.createServer(this.serverListener.bind(this))
 
-        serverState.registerSigHandler(server, "http", REGISTER_SERVICE)
-        if(REGISTER_SERVICE) { service.register(DEV_ENV); }
+        serverState.registerSigHandler(server, "http", REGISTER_CHECK)
+        if(REGISTER_CHECK) { consul.registerCheck(); }
 
         let serverType = keyExists && options.key !== "" ? "https" : "http"
         let serverPort = serverType === "https" ? 443 : 80;
@@ -144,7 +137,7 @@ const server = {
                 contentType != "application/gzip" && !isIndex && readable.pipe(res)
                 isIndex && readable.on("end", () => res.end())
                 isIndex && readable.on("data", (chunk) => {
-                    res.write(chunk.toString().replace(/%%VERSION%%/, service.IMAGE_VER))
+                    res.write(chunk.toString().replace(/%%VERSION%%/, IMAGE_TAG))
                 })
             })
         }

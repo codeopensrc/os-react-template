@@ -1,0 +1,80 @@
+{{- if .Values.svcDiscovery.consul.enabled }}
+{{- with .Values.svcDiscovery.consul }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "react-template.fullname" $ }}-consul-svcinit
+  annotations:
+    {{- with .annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ttlSecondsAfterFinished: {{ default 20 .ttlSecondsAfterFinished }}
+  template:
+    spec:
+      containers:
+      - name: {{ include "react-template.fullname" $ }}-consul-init
+        image: {{ .image.repository }}:{{ default "latest" .image.tag }}
+        imagePullPolicy: {{ .image.pullPolicy }}
+        command: 
+          - sh
+          - -c
+          - |
+            apk add curl
+            curl -X PUT -H 'Content-Type: application/json' \
+              http://$(CONSUL_HOST):$(CONSUL_PORT)/v1/agent/service/register \
+              -d '{"ID": "$(CONSUL_SERVICE_NAME)", 
+              "Name": "$(CONSUL_SERVICE_NAME)", 
+              "Port": $(CONSUL_SERVICE_PORT), 
+              "Address": "http://$(CONSUL_SERVICE_NAME)", 
+              "Tags": ["_version=$(IMAGE_TAG)", "_port=$(CONSUL_SERVICE_PORT)"],
+              "EnableTagOverride": false}'
+        env:
+        - name: CONSUL_HOST
+          value: {{ default "172.17.0.1" (get .env "CONSUL_HOST") | quote }}
+        - name: CONSUL_PORT
+          value: {{ default "8500" (get .env "CONSUL_PORT") | quote }}
+        - name: CONSUL_SERVICE_NAME
+          value: {{ include "react-template.fullname" $ }}
+        - name: CONSUL_SERVICE_PORT
+          value: {{ get (first $.Values.service.ports) "servicePort" | quote }}
+        - name: IMAGE_TAG
+          value: {{ $.Values.image.tag | default $.Chart.AppVersion | quote }}
+      restartPolicy: {{ .restartPolicy }}
+  backoffLimit: {{ .backoffLimit }}
+---
+{{- if .postannotations }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "react-template.fullname" $ }}-consul-svcdel
+  annotations:
+    {{- with .postannotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ttlSecondsAfterFinished: {{ default 20 .ttlSecondsAfterFinished }}
+  template:
+    spec:
+      containers:
+      - name: {{ include "react-template.fullname" $ }}-consul-del
+        image: {{ .image.repository }}:{{ default "latest" .image.tag }}
+        imagePullPolicy: {{ .image.pullPolicy }}
+        command: 
+        - sh
+        - -c
+        - |
+          apk add curl
+          curl -X PUT http://$(CONSUL_HOST):$(CONSUL_PORT)/v1/agent/service/deregister/$(CONSUL_SERVICE_NAME)
+        env:
+        - name: CONSUL_HOST
+          value: {{ default "172.17.0.1" (get .env "CONSUL_HOST") | quote }}
+        - name: CONSUL_PORT
+          value: {{ default "8500" (get .env "CONSUL_PORT") | quote }}
+        - name: CONSUL_SERVICE_NAME
+          value: {{ include "react-template.fullname" $ }}
+      restartPolicy: {{ .restartPolicy }}
+  backoffLimit: {{ .backoffLimit }}
+{{- end }}
+{{- end }}
+{{- end }}

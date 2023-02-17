@@ -5,6 +5,12 @@ app:
   image:
     pullPolicy: IfNotPresent
   replicaCount: 1
+  svcDiscovery:
+    consul:
+      enabled: true
+      env:
+        CONSUL_HOST: "192.168.49.1"
+        CONSUL_PORT: "8500"
   service:
     ports:
       - servicePort: 80

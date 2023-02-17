@@ -1,10 +1,9 @@
 "use strict";
 
 const os = require("os");
-const { service } = require("os-npm-util");
+const consul = require("./consul.js");
 
-const REGISTER_SERVICE = process.env.REGISTER_SERVICE === "true"
-
+const REGISTER_CHECK = process.env.REGISTER_CHECK === "true"
 const LOG_EVERY_NUM_CHECKS = process.env.LOG_EVERY_NUM_CHECKS || 30;
 let serverCheckCount = 0;
 
@@ -70,14 +69,14 @@ module.exports = {
 
         let checkPassOrFail = systems_online ? "pass" : "fail"
 
-        REGISTER_SERVICE && service.sendHealthCheck(checkPassOrFail)
+        REGISTER_CHECK && consul.sendHealthCheck(checkPassOrFail)
     },
 
     registerSigHandler: function (server, type, deregister) {
         let close = () => {
             console.log(`${type} received SIG signal, shutting down`);
             deregister && (this.deregistering = true);
-            deregister && service.deregisterSelf(() => {
+            deregister && consul.deregisterCheck((err, res) => {
                 this.deregistering = false
                 this.tryToExit();
             });

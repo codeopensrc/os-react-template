@@ -4,9 +4,6 @@ app:
     MONGO_DB_NAME: "mongo"
     SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
   configMapData:
-    CONSUL_SERVICE_NAME:     "react"
-    CONSUL_HOST:             "172.17.0.1"
-    REGISTER_SERVICE:        "false"
     DEV_DATABASE_URL_ORIGIN: "mongodb://react-db:27017"
     ENABLE_DB:               "false"
 db:

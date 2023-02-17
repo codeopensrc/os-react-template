@@ -131,6 +131,29 @@ job: &job
   - -c
   - echo "test"
 
+svcDiscovery: &svcDiscovery
+  consul:
+    enabled: false
+    #ttlSecondsAfterFinished: 20
+    annotations:
+      # pre-install to have a service available to register check with
+      "helm.sh/hook": "pre-install"
+    postannotations:
+      "helm.sh/hook": "pre-delete"
+    image:
+      repository: alpine
+      pullPolicy: Always
+      tag: ""
+    backoffLimit: 0
+    restartPolicy: Never
+    env: {}
+    #  CONSUL_HOST: "172.17.0.1"
+    #  CONSUL_PORT: "8500"
+    command:
+    - bash
+    - -c
+    - echo "test"
+
 persistence: &persistence
   statefulset:
     #volumeClaimTemplateName: database
@@ -211,9 +234,6 @@ secretStringData: &secretStringData {}
 #  SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
 
 configMapData: &configMapData {}
-#  CONSUL_SERVICE_NAME:     "react"
-#  CONSUL_HOST:             "172.17.0.1"
-#  REGISTER_SERVICE:        "false"
 #  DEV_DATABASE_URL_ORIGIN: "mongodb://react-db:27017"
 #  ENABLE_DB:               "false"
 
@@ -294,6 +314,7 @@ template: &template
   deployMinReadySeconds: &deployMinReadySeconds
   stsMinReadySeconds: &stsMinReadySeconds
   job: *job
+  svcDiscovery: *svcDiscovery
   persistence: *persistence
   volumeClaimMounts: *volumeClaimMounts
   volumeMounts: *volumeMounts

@@ -17,7 +17,6 @@ services:
         volumes:
             - "${FOLDER_LOCATION:-.}/src:/home/app/src"
             - "${FOLDER_LOCATION:-.}/server:/home/app/server"
-            - "${FOLDER_LOCATION:-.}/docker-compose.yml:/home/app/docker-compose.yml"
         env_file:
             - "${COMPOSE_ENV_FILE:-.env.tmpl}"
         environment:
@@ -53,6 +52,4 @@ services:
         env_file:
             - "${COMPOSE_ENV_FILE:-.env.tmpl}"
         environment:
-            CONSUL_SERVICE_NAME:    "react"
-            REGISTER_SERVICE:       "false"
             ENABLE_DB:              "false"

@@ -152,6 +152,23 @@ spec:
               {{- end }}
             initialDelaySeconds: {{ default 5 .Values.containerProbe.initialDelaySeconds }}
           {{- end }}
+          env:
+            - name: IMAGE_TAG
+              value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- if .Values.svcDiscovery.consul.enabled }}
+            - name: CONSUL_HOST
+              value: {{ default "172.17.0.1" (get .Values.svcDiscovery.consul.env "CONSUL_HOST") | quote }}
+            - name: CONSUL_PORT
+              value: {{ default "8500" (get .Values.svcDiscovery.consul.env "CONSUL_PORT") | quote }}
+            - name: CONSUL_SERVICE_NAME
+              value: {{ include "react-template.fullname" . }}
+            - name: REGISTER_CHECK
+              value: "true"
+            {{- end }}
           envFrom:
             {{- if .Values.secretStringData }}
             - secretRef:
@@ -200,7 +217,7 @@ spec:
               {{- end }}
             {{- end }}
         {{- range .Values.additionalContainers }}
-        - name: {{ .name}}
+        - name: {{ .name }}
           image: {{ .image }}
           command: 
             {{- toYaml .command | nindent 12 }}
@@ -227,7 +244,7 @@ spec:
       volumes:
         {{- range .Values.volumeMounts }}
         {{- if .mountType }}
-        - name: {{ .name  }}
+        - name: {{ .name }}
           {{- toYaml .mountType | nindent 10 }}
         {{- end }}
         {{- end }}

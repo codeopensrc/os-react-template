@@ -146,8 +146,8 @@ default:
 
 .create_helm_values: &create_helm_values
   - |
-    REGISTER_SERVICE="false"
-    [[ $KUBE_NAMESPACE = "production" ]] && REGISTER_SERVICE="true"
+    ENABLE_CONSUL=false
+    [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_CONSUL=true
     cat <<EOF > helm_ci_values.yaml
     app:
       imagePullSecrets:
@@ -155,6 +155,11 @@ default:
       image:
         repository: "${PROJECT_APP_IMAGE}"
         tag: "${HELM_IMAGE_TAG}"
+      svcDiscovery:
+        consul:
+          enabled: $ENABLE_CONSUL
+          env:
+            CONSUL_HOST: consul.${SERVER_DOMAIN}
       ciLabels:
         app: "${APPNAME}"
         env: "${CI_ENVIRONMENT_SLUG}"
@@ -165,7 +170,6 @@ default:
         MONGO_DB_NAME: "${MONGO_DB_NAME}"
         SAMPLE_SECRET: "${SAMPLE_SECRET}"
       configMapData:
-        REGISTER_SERVICE:     "${REGISTER_SERVICE}"
         ENABLE_DB:            "${ENABLE_DB}"
         DEV_DATABASE_URL_ORIGIN: "mongodb://${APPNAME}-db:27017"
     db:
