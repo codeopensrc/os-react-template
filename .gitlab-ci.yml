@@ -31,6 +31,12 @@ variables:
   ENABLE_DB: "true"
   SKAFFOLD_CLI_OPTS: "--interactive=false --update-check=false"
   SAMPLE_SECRET: "secret_value"
+  RELEASE:
+    description: "Optionally define a release when running against master branch - options 'stable, patch, minor, major'"
+  ONLY_DEPLOY_PROD:
+    description: "Optionally skip build steps and only run 'deploy_production' job - Only option 'true'"
+  STOP_PROD:
+    description: "USE WITH CAUTION - Used to stop production environment - Only option 'true'"
 
 default:
   before_script:
@@ -63,7 +69,7 @@ default:
   '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && $RELEASE == "stable"'
 
 .is_web_master_release: &is_web_master_release
-  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && ($RELEASE != null && $RELEASE != "stable")'
+  '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_NAME == "master" && ($RELEASE != "" && $RELEASE != "stable")'
 
 .trigger_deploy_prod_job: &trigger_deploy_prod_job
   ## Keeping SKIP_BETA var to showcase passing vars to pipelines
@@ -281,9 +287,11 @@ echo_env_vars:
   - echo $CI_PROJECT_ID
   - echo $CI_KUBERNETES_ACTIVE
   - echo $CI_CONFIG_PATH
+  - echo $RELEASE
+  - echo $ONLY_DEPLOY_PROD
+  - echo $STOP_PROD
   rules:
   - if: $CI_PIPELINE_SOURCE != "merge_request_event"
-
 
 ########################
 #### FEATURE BRANCH
@@ -376,7 +384,7 @@ build_beta:
   - "OUTPUT_IMGS=${PROJECT_APP_IMAGE}:${BETA}"
   - *build_image
   rules:
-  - if: '$SKIP_WEB_DEFAULT_RUN == "true" || $RELEASE != null'
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true" || $RELEASE != ""'
     when: never
   - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
 
@@ -408,7 +416,7 @@ deploy_beta:
     on_stop: stop_beta
     auto_stop_in: 1 hour
   rules:
-  - if: '$SKIP_WEB_DEFAULT_RUN == "true" || $RELEASE != null'
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true" || $RELEASE != ""'
     when: never
   - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
 
@@ -428,7 +436,7 @@ stop_beta:
     name: beta
     action: stop
   rules:
-  - if: '$SKIP_WEB_DEFAULT_RUN == "true" || $RELEASE != null'
+  - if: '$SKIP_WEB_DEFAULT_RUN == "true" || $RELEASE != ""'
     when: never
   - if: ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_NAME == "master"
     when: manual

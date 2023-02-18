@@ -7,7 +7,7 @@ app:
   replicaCount: 1
   svcDiscovery:
     consul:
-      enabled: true
+      enabled: false
       env:
         CONSUL_HOST: "192.168.49.1"
         CONSUL_PORT: "8500"
