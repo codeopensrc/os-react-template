@@ -3,6 +3,7 @@ app:
   enabled: true
   image:
     pullPolicy: Always
+    tag: "skaffold-dev"
   replicaCount: 1
   service:
     ports:

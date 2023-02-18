@@ -2,6 +2,10 @@ apiVersion: v2
 name: react
 description: Helm chart for react+mongodb application
 type: application
+###! Manually update when ONLY updating chart/subcharts/chart dependencies
+###! Otherwise it is updated in ci when appVersion gets an update
+###! We _shouldnt_ "release" (triggering version updates) for only chart updates
+###! TODO: Somehow add safeguard to not update chart version in ci if manually updated
 ###! For now tieing tpl and react chart versioning together
 version: 0.7.1
 ###! Follows the version in docker-compose.yml

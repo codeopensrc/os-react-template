@@ -4,6 +4,7 @@ app:
   enabled: true
   image:
     pullPolicy: IfNotPresent
+    tag: "skaffold-dev"
   replicaCount: 1
   svcDiscovery:
     consul:
