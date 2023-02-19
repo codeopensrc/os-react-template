@@ -114,6 +114,7 @@ spec:
                 {{- end }}
               topologyKey: "kubernetes.io/hostname"
             weight: 100
+      terminationGracePeriodSeconds: 10
       containers:
         - name: {{ include "react-template.fullname" . }}
           securityContext:
@@ -131,26 +132,45 @@ spec:
               protocol: {{ default "TCP" .proto }}
             {{- end }}
           {{- if .Values.containerProbe.enabled }}
-          livenessProbe:
+          {{- range $probename, $probe := .Values.containerProbe.probes }}
+          {{- if $probe.enabled }}
+          {{ $probename }}:
+            {{- if eq (default "http" $.Values.containerProbe.type) "http" }}
             httpGet:
-              path: {{ default "/" .Values.containerProbe.path }}
-              port: {{ default "http" .Values.containerProbe.port }}
-              {{- with .Values.containerProbe.httpHeaders }}
+              path: {{ default "/" $.Values.containerProbe.http.path }}
+              port: {{ default "http" $.Values.containerProbe.port }}
+              {{- with $.Values.containerProbe.http.headers }}
               httpHeaders:
                 {{- toYaml . | nindent 16 }}
               {{- end }}
-            failureThreshold: {{ default 50 .Values.containerProbe.failureThreshold }}
+            {{- else if eq $.Values.containerProbe.type "tcp" }}
+            tcpSocket:
+              port: {{ default "http" $.Values.containerProbe.port }}
+            {{- else if eq $.Values.containerProbe.type "grpc" }}
+            grpc:
+              {{- $grpcPort := default 80 $.Values.containerProbe.port }}
+              {{- if eq ($grpcPort | int) 0 }}
+              {{ fail "if containerProbe.type is grpc, containerProbe.port cannot be a named port" }}
+              {{- else }}
+              port: {{ $grpcPort | int }}
+              {{- end }}
+            {{- else if eq $.Values.containerProbe.type "exec" }}
+            exec:
+              command: 
+                {{- toYaml $.Values.containerProbe.exec.command | nindent 16 }}
+            {{- else }}
+              {{- fail (cat (println "if containerProbe.enabled set to true")
+                "containerProbe.type must be one of [http tcp exec grpc]") }}
+            {{- end }}
+            failureThreshold: {{ $probe.failureThreshold }}
+            periodSeconds: {{ $probe.periodSeconds }}
+            successThreshold: {{ $probe.successThreshold }}
+            timeoutSeconds: {{ $probe.timeoutSeconds }}
+            {{- if and (ne $probename "startupProbe") (not $.Values.containerProbe.probes.startupProbe.enabled) }}
+            initialDelaySeconds: {{ $probe.initialDelaySeconds }}
+            {{- end }}
           {{- end }}
-          {{- if .Values.containerProbe.enabled }}
-          readinessProbe:
-            httpGet:
-              path: {{ default "/" .Values.containerProbe.path }}
-              port: {{ default "http" .Values.containerProbe.port }}
-              {{- with .Values.containerProbe.httpHeaders }}
-              httpHeaders:
-                {{- toYaml . | nindent 16 }}
-              {{- end }}
-            initialDelaySeconds: {{ default 5 .Values.containerProbe.initialDelaySeconds }}
+          {{- end }}
           {{- end }}
           env:
             - name: IMAGE_TAG

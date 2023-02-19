@@ -96,17 +96,38 @@ containerPorts: &containerPorts
     port: 80
     #proto: TCP
 
-## TODO: More config/support more types
-## For now only supports 1 basic httpGet probe config
 containerProbe: &containerProbe
   enabled: true
-  path: /healthcheck
-  #port: http
-  #initialDelaySeconds: 10
-  #failureThreshold: 30
-  httpHeaders:
+  #type: "http" # http, tcp, exec, or grpc
+  #port: http # grpc cannot have named ports
+  http:
+    path: /healthcheck
+    headers:
     - name: Host
       value: localhost
+  exec:
+    command: []
+  probes:
+    startupProbe:
+      enabled: true
+      failureThreshold: 60
+      periodSeconds: 2
+      successThreshold: 1
+      timeoutSeconds: 2
+    livenessProbe:
+      enabled: true
+      failureThreshold: 10
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 2
+      initialDelaySeconds: 10
+    readinessProbe:
+      enabled: true
+      failureThreshold: 3
+      periodSeconds: 5
+      successThreshold: 1
+      timeoutSeconds: 2
+      initialDelaySeconds: 5
 
 useStatefulSet: &useStatefulSet false
 statefulSetPodManagementPolicy: &statefulSetPodManagementPolicy ""

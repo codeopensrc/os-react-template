@@ -73,8 +73,8 @@ module.exports = {
     },
 
     registerSigHandler: function (server, type, deregister) {
-        let close = () => {
-            console.log(`${type} received SIG signal, shutting down`);
+        let close = (SIG) => {
+            console.log(`${type} received ${SIG} signal, shutting down`);
             deregister && (this.deregistering = true);
             deregister && consul.deregisterCheck((err, res) => {
                 this.deregistering = false
