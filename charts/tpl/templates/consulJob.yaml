@@ -21,7 +21,7 @@ spec:
           - -c
           - |
             apk add curl
-            curl -X PUT -H 'Content-Type: application/json' \
+            curl -i -s -X PUT -H 'Content-Type: application/json' \
               http://$(CONSUL_HOST):$(CONSUL_PORT)/v1/agent/service/register \
               -d '{"ID": "$(CONSUL_SERVICE_NAME)", 
               "Name": "$(CONSUL_SERVICE_NAME)", 
@@ -39,7 +39,7 @@ spec:
         - name: CONSUL_SERVICE_PORT
           value: {{ get (first $.Values.service.ports) "servicePort" | quote }}
         - name: IMAGE_TAG
-          value: {{ $.Values.image.tag | default $.Chart.AppVersion | quote }}
+          value: {{ default $.Chart.AppVersion (include "react-template.imageTag" $) | quote }}
       restartPolicy: {{ .restartPolicy }}
   backoffLimit: {{ .backoffLimit }}
 ---
@@ -65,7 +65,7 @@ spec:
         - -c
         - |
           apk add curl
-          curl -X PUT http://$(CONSUL_HOST):$(CONSUL_PORT)/v1/agent/service/deregister/$(CONSUL_SERVICE_NAME)
+          curl -i -s -X PUT http://$(CONSUL_HOST):$(CONSUL_PORT)/v1/agent/service/deregister/$(CONSUL_SERVICE_NAME)
         env:
         - name: CONSUL_HOST
           value: {{ default "172.17.0.1" (get .env "CONSUL_HOST") | quote }}

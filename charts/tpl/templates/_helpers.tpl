@@ -31,11 +31,20 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
-Add imageTag label if custom tag for image is provided.
+Cleanup .Values.image.tag if provided.
 */}}
 {{- define "react-template.imageTag" -}}
 {{- if .Values.image.tag }}
-imageTag: {{ .Values.image.tag | trunc 25 | quote }}
+{{- regexReplaceAll "[^-.\\w]+" .Values.image.tag "-" | trunc 25 }}
+{{- end }}
+{{- end }}
+
+{{/*
+Add clean imageTag label if custom tag is provided.
+*/}}
+{{- define "react-template.imageTagLabel" -}}
+{{- if .Values.image.tag }}
+imageTag: {{ include "react-template.imageTag" . }}
 {{- end }}
 {{- end }}
 
