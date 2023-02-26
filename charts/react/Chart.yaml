@@ -7,7 +7,7 @@ type: application
 ###! We _shouldnt_ "release" (triggering version updates) for only chart updates
 ###! TODO: Somehow add safeguard to not update chart version in ci if manually updated
 ###! For now tieing tpl and react chart versioning together
-version: 0.7.2
+version: 0.7.3
 ###! Follows the version in docker-compose.yml
 ###! Updated in CI and should not need manual updates
 appVersion: "0.9.0-ec7897d"
@@ -15,7 +15,7 @@ appVersion: "0.9.0-ec7897d"
 ## Data imported only available to manifests in this charts templates/ folder
 dependencies:
 - name: tpl
-  version: 0.7.2
+  version: 0.7.3
   alias: app
   condition: app.enabled
   ##! Dependency location for dev
@@ -23,7 +23,7 @@ dependencies:
   ##! Dependency location when packaged in helm chart repository
   #repository: https://gitlab.codeopensrc.com/api/v4/projects/36/packages/helm/stable
 - name: tpl
-  version: 0.7.2
+  version: 0.7.3
   alias: db
   condition: db.enabled
   ##! Dependency location for dev

@@ -56,6 +56,7 @@ spec:
         {{- with .Values.ciLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- include "react-template.imageTag" . | nindent 8 }}
       annotations:
         {{- if .Values.configMapData }}
         configHash: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
