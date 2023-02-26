@@ -45,7 +45,6 @@ Common labels
 {{- define "react-template.labels" -}}
 helm.sh/chart: {{ include "react-template.chart" . }}
 {{ include "react-template.selectorLabels" . }}
-{{ include "react-template.imageTag" . }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
