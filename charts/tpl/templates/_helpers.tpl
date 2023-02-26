@@ -31,14 +31,29 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
+Cleanup .Values.image.tag if provided.
+*/}}
+{{- define "react-template.imageTag" -}}
+{{- if .Values.image.tag }}
+{{- regexReplaceAll "[^-.\\w]+" .Values.image.tag "-" | trunc 30 }}
+{{- end }}
+{{- end }}
+
+{{/*
+Add clean imageTag label if custom tag is provided.
+*/}}
+{{- define "react-template.imageTagLabel" -}}
+{{- if .Values.image.tag }}
+imageTag: {{ include "react-template.imageTag" . }}
+{{- end }}
+{{- end }}
+
+{{/*
 Common labels
 */}}
 {{- define "react-template.labels" -}}
 helm.sh/chart: {{ include "react-template.chart" . }}
 {{ include "react-template.selectorLabels" . }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-{{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 

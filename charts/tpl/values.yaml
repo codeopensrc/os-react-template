@@ -140,7 +140,7 @@ job: &job
   #ttlSecondsAfterFinished: 120
   annotations:
     # post-install runs after all resources in "ready" state
-    "helm.sh/hook": "post-install"
+    "helm.sh/hook": post-install
   image:
     repository: busybox
     pullPolicy: Always
@@ -158,9 +158,9 @@ svcDiscovery: &svcDiscovery
     #ttlSecondsAfterFinished: 20
     annotations:
       # pre-install to have a service available to register check with
-      "helm.sh/hook": "pre-install"
+      "helm.sh/hook": pre-install,pre-upgrade
     postannotations:
-      "helm.sh/hook": "pre-delete"
+      "helm.sh/hook": pre-delete
     image:
       repository: alpine
       pullPolicy: Always
