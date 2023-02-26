@@ -35,7 +35,7 @@ Cleanup .Values.image.tag if provided.
 */}}
 {{- define "react-template.imageTag" -}}
 {{- if .Values.image.tag }}
-{{- regexReplaceAll "[^-.\\w]+" .Values.image.tag "-" | trunc 25 }}
+{{- regexReplaceAll "[^-.\\w]+" .Values.image.tag "-" | trunc 30 }}
 {{- end }}
 {{- end }}
 
