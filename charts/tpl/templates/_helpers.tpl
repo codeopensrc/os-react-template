@@ -35,7 +35,7 @@ Add imageTag label if custom tag for image is provided.
 */}}
 {{- define "react-template.imageTag" -}}
 {{- if .Values.image.tag }}
-imageTag: {{ .Values.image.tag | quote }}
+imageTag: {{ .Values.image.tag | trunc 25 | quote }}
 {{- end }}
 {{- end }}
 
