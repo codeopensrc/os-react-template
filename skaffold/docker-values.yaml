@@ -18,6 +18,13 @@ app:
         targetContainerPortName: http
       - servicePort: 5055
         targetContainerPortName: reloader
+  ingress:
+    enabled: false
+    ingressClassName: "nginx"
+    hosts:
+      - host: react.k8s.example.com
+      - host: react.reloader.k8s.example.com
+        optSvcPort: 5055
   containerPorts:
     - name: http
       port: 80

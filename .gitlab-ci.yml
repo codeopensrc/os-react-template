@@ -230,6 +230,7 @@ default:
   - curl -sS -X POST -F "chart=@tpl-${CHART_VERSION}.tgz"
     --user gitlab-ci-token:$CI_JOB_TOKEN
     ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts
+  - sleep 10;
   - 'sed -i "s| repository: file| #repository: file|" ${APP_CHART_DIR}/Chart.yaml'
   - 'sed -i "s| #repository: https| repository: https|" ${APP_CHART_DIR}/Chart.yaml'
   - helm package -u ${APP_CHART_DIR}

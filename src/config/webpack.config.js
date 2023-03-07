@@ -43,7 +43,7 @@ module.exports = [{
     },
     // Runs hot reloading server when using `webpack serve`
     devServer: {
-        allowedHosts: "auto",
+        allowedHosts: "all",
         host: "0.0.0.0",
         port: LIVE_RELOADER_PORT,
         hot: true,

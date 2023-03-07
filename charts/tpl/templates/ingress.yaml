@@ -1,6 +1,7 @@
 {{- if .Values.ingress.enabled -}}
 {{- $fullName := include "react-template.fullname" . -}}
-{{- $svcPort := .Values.service.port -}}
+{{- $defaultSvcPort := get (index .Values.service.ports 0) "servicePort" -}}
+{{- $defaultPath := list (dict "path" "/" "pathType" "Prefix") }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,6 +13,9 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  {{- if .Values.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- end }}
   {{- if .Values.ingress.tls }}
   tls:
     {{- range .Values.ingress.tls }}
@@ -24,12 +28,13 @@ spec:
   {{- end }}
   rules:
     {{- range .Values.ingress.hosts }}
+    {{- $svcPort := default $defaultSvcPort .optSvcPort }}
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- range .paths }}
+          {{- range (default $defaultPath .paths) }}
           - path: {{ .path }}
-            pathType: {{ .pathType }}
+            pathType: {{ default "Prefix" .pathType }}
             backend:
               service:
                 name: {{ $fullName }}
