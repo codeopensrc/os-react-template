@@ -223,7 +223,6 @@ default:
 
 .deploy_helm_chart: &deploy_helm_chart
   - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" charts/tpl/Chart.yaml ${APP_CHART_DIR}/Chart.yaml'
-  - '[[ $KUBE_NAMESPACE = "review" ]] && DISABLE_TLS="--set ingress.tls=[]"'
   #- *add_helm_repos
   - helm dependency build ${APP_CHART_DIR}
   - helm upgrade $APPNAME ${APP_CHART_DIR} --install -f skaffold/ci-values.yaml -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait $DISABLE_TLS
