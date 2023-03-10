@@ -4,6 +4,9 @@ app:
   image:
     pullPolicy: Always
   replicaCount: 1
+  ingress:
+    enabled: false
+    ingressClassName: "nginx"
 db:
   enabled: true
   replicaCount: 1
@@ -18,7 +21,6 @@ db:
         targetContainerPortName: mongo
   ingress:
     enabled: false
-    ingressClassName: "nginx"
   containerPorts:
     - name: mongo
       port: 27017
