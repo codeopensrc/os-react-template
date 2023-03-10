@@ -172,9 +172,14 @@ default:
             CONSUL_HOST: consul.${SERVER_DOMAIN}
       ingress:
         enabled: true
-        ingressClassName: "nginx"
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
         hosts:
-          - host: "${URL}"
+          - host: "${INGRESS_HOST}"
+        tls:
+        - hosts: 
+          - "${INGRESS_HOST}"
+          secretName: ${SUBDOMAIN}-tls
       ciLabels:
         app: "${APPNAME}"
         env: "${CI_ENVIRONMENT_SLUG}"
@@ -218,9 +223,10 @@ default:
 
 .deploy_helm_chart: &deploy_helm_chart
   - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" charts/tpl/Chart.yaml ${APP_CHART_DIR}/Chart.yaml'
+  - [[ $KUBE_NAMESPACE = "review" ]] && DISABLE_TLS="--set ingress.tls=[]"
   #- *add_helm_repos
   - helm dependency build ${APP_CHART_DIR}
-  - helm upgrade $APPNAME ${APP_CHART_DIR} --install -f skaffold/ci-values.yaml -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait
+  - helm upgrade $APPNAME ${APP_CHART_DIR} --install -f skaffold/ci-values.yaml -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait $DISABLE_TLS
   - helm history $APPNAME -n $KUBE_NAMESPACE
   - kubectl get all -n $KUBE_NAMESPACE -l "app.kubernetes.io/instance=${APPNAME}"
   ## rollout status multiple resource support in 1.25 https://github.com/kubernetes/kubernetes/pull/108777
@@ -331,9 +337,8 @@ deploy_review:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
   - HELM_IMAGE_TAG=${CI_COMMIT_SHORT_SHA}
-  #- KUBE_INGRESS_BASE_DOMAIN=dev.${SERVER_DOMAIN}
-  #- 'URL=http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
-  - 'URL=http://${SUBDOMAIN}.${CI_ENVIRONMENT_SLUG}.k8s.${SERVER_DOMAIN}'
+  - 'INGRESS_HOST=${SUBDOMAIN}.${CI_ENVIRONMENT_SLUG}.dev.k8s.${SERVER_DOMAIN}'
+  - 'URL=http://${INGRESS_HOST}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: ${URL}"'
@@ -408,8 +413,8 @@ deploy_beta:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   - HELM_IMAGE_TAG=${BETA}
-  - KUBE_INGRESS_BASE_DOMAIN=beta.${SERVER_DOMAIN}
-  - 'URL=https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
+  - 'INGRESS_HOST=${SUBDOMAIN}.beta.k8s.${SERVER_DOMAIN}'
+  - 'URL=https://${INGRESS_HOST}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: ${URL}"'
@@ -601,7 +606,10 @@ deploy_production:
   - APPNAME=${SERVICE_NAME}
   ## Need HELM_IMAGE_TAG for 'image.tag' otherwise it falls back to 'tpl' chart's appVersion
   - HELM_IMAGE_TAG=$(grep ^appVersion ./${APP_CHART_DIR}/Chart.yaml | awk '{print $2}' | tr -d '"')
-  - 'URL=https://${SUBDOMAIN}.${SERVER_DOMAIN}'
+  ## TODO: tls cert resolving at root with ingress without *k8s
+  #- 'INGRESS_HOST=https://${SUBDOMAIN}.${SERVER_DOMAIN}'
+  - 'INGRESS_HOST=${SUBDOMAIN}.k8s.${SERVER_DOMAIN}'
+  - 'URL=https://${INGRESS_HOST}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: ${URL}"'

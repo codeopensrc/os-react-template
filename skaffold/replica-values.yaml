@@ -15,10 +15,17 @@ app:
   ingress:
     enabled: false
     ingressClassName: "nginx"
+    #annotations:
+    #  cert-manager.io/cluster-issuer: letsencrypt-staging
     hosts:
       - host: react.k8s.example.com
       - host: react.reloader.k8s.example.com
         optSvcPort: 5055
+    #tls:
+    #- hosts:
+    #  - react.k8s.example.com
+    #  - react.reloader.k8s.example.com
+    #  secretName: react-tls
   containerPorts:
     - name: http
       port: 80

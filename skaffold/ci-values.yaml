@@ -18,6 +18,7 @@ db:
         targetContainerPortName: mongo
   ingress:
     enabled: false
+    ingressClassName: "nginx"
   containerPorts:
     - name: mongo
       port: 27017
