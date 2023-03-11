@@ -157,7 +157,9 @@ default:
 .create_helm_values: &create_helm_values
   - |
     ENABLE_CONSUL=false
+    RECLAIM_POLICY=Delete
     [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_CONSUL=true
+    #[[ $KUBE_NAMESPACE = "production" ]] && RECLAIM_POLICY=Retain
     cat <<EOF > helm_ci_values.yaml
     app:
       imagePullSecrets:
@@ -202,6 +204,10 @@ default:
         app.gitlab.com/env: "${CI_ENVIRONMENT_SLUG}"
       secretStringData:
         MONGO_INITDB_DATABASE: "${MONGO_DB_NAME}"
+      persistence:
+        statefulset:
+          persistentVolumeClaimRetentionPolicy:
+            whenDeleted: "${RECLAIM_POLICY}"
     EOF
 
 ###! 'helm repo add' necessary in helm v4 for 'repository: https' dependency charts
@@ -225,7 +231,7 @@ default:
   - '[[ -n $HELM_IMAGE_TAG ]] && sed -i "s|appVersion: .*|appVersion: \"${HELM_IMAGE_TAG}\"|" charts/tpl/Chart.yaml ${APP_CHART_DIR}/Chart.yaml'
   #- *add_helm_repos
   - helm dependency build ${APP_CHART_DIR}
-  - helm upgrade $APPNAME ${APP_CHART_DIR} --install -f skaffold/ci-values.yaml -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait $DISABLE_TLS
+  - helm upgrade $APPNAME ${APP_CHART_DIR} --install -f skaffold/ci-values.yaml -f helm_ci_values.yaml -n $KUBE_NAMESPACE --wait
   - helm history $APPNAME -n $KUBE_NAMESPACE
   - kubectl get all -n $KUBE_NAMESPACE -l "app.kubernetes.io/instance=${APPNAME}"
   ## rollout status multiple resource support in 1.25 https://github.com/kubernetes/kubernetes/pull/108777
@@ -605,9 +611,7 @@ deploy_production:
   - APPNAME=${SERVICE_NAME}
   ## Need HELM_IMAGE_TAG for 'image.tag' otherwise it falls back to 'tpl' chart's appVersion
   - HELM_IMAGE_TAG=$(grep ^appVersion ./${APP_CHART_DIR}/Chart.yaml | awk '{print $2}' | tr -d '"')
-  ## TODO: tls cert resolving at root with ingress without *k8s
-  #- 'INGRESS_HOST=https://${SUBDOMAIN}.${SERVER_DOMAIN}'
-  - 'INGRESS_HOST=${SUBDOMAIN}.k8s.${SERVER_DOMAIN}'
+  - 'INGRESS_HOST=https://${SUBDOMAIN}.${SERVER_DOMAIN}'
   - 'URL=https://${INGRESS_HOST}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
