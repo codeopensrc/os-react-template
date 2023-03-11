@@ -17,7 +17,7 @@ spec:
   ingressClassName: {{ .Values.ingress.ingressClassName }}
   {{- end }}
   tls:
-  {{- range .Values.ingress.tls }}
+  {{- with .Values.ingress.tls }}
   {{- if gt (len .hosts) 0 }}
   - hosts:
     {{- toYaml .hosts | nindent 4 }}
