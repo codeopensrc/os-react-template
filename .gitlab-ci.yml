@@ -157,7 +157,9 @@ default:
 .create_helm_values: &create_helm_values
   - |
     ENABLE_CONSUL=false
+    RECLAIM_POLICY=Delete
     [[ $KUBE_NAMESPACE = "production" ]] && ENABLE_CONSUL=true
+    #[[ $KUBE_NAMESPACE = "production" ]] && RECLAIM_POLICY=Retain
     cat <<EOF > helm_ci_values.yaml
     app:
       imagePullSecrets:
@@ -170,6 +172,16 @@ default:
           enabled: $ENABLE_CONSUL
           env:
             CONSUL_HOST: consul.${SERVER_DOMAIN}
+      ingress:
+        enabled: true
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+        hosts:
+          - host: "${INGRESS_HOST}"
+        tls:
+          - hosts: 
+              - "${INGRESS_HOST}"
+            secretName: ${SUBDOMAIN}-tls
       ciLabels:
         app: "${APPNAME}"
         env: "${CI_ENVIRONMENT_SLUG}"
@@ -192,6 +204,10 @@ default:
         app.gitlab.com/env: "${CI_ENVIRONMENT_SLUG}"
       secretStringData:
         MONGO_INITDB_DATABASE: "${MONGO_DB_NAME}"
+      persistence:
+        statefulset:
+          persistentVolumeClaimRetentionPolicy:
+            whenDeleted: "${RECLAIM_POLICY}"
     EOF
 
 ###! 'helm repo add' necessary in helm v4 for 'repository: https' dependency charts
@@ -230,6 +246,7 @@ default:
   - curl -sS -X POST -F "chart=@tpl-${CHART_VERSION}.tgz"
     --user gitlab-ci-token:$CI_JOB_TOKEN
     ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/stable/charts
+  - sleep 10;
   - 'sed -i "s| repository: file| #repository: file|" ${APP_CHART_DIR}/Chart.yaml'
   - 'sed -i "s| #repository: https| repository: https|" ${APP_CHART_DIR}/Chart.yaml'
   - helm package -u ${APP_CHART_DIR}
@@ -325,8 +342,8 @@ deploy_review:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${CI_ENVIRONMENT_SLUG}-${SERVICE_NAME}
   - HELM_IMAGE_TAG=${CI_COMMIT_SHORT_SHA}
-  - KUBE_INGRESS_BASE_DOMAIN=dev.${SERVER_DOMAIN}
-  - 'URL=http://${CI_ENVIRONMENT_SLUG}.${KUBE_NAMESPACE}.${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
+  - 'INGRESS_HOST=${SUBDOMAIN}.${CI_ENVIRONMENT_SLUG}.dev.k8s.${SERVER_DOMAIN}'
+  - 'URL=http://${INGRESS_HOST}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: ${URL}"'
@@ -401,8 +418,8 @@ deploy_beta:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
   - HELM_IMAGE_TAG=${BETA}
-  - KUBE_INGRESS_BASE_DOMAIN=beta.${SERVER_DOMAIN}
-  - 'URL=https://${SUBDOMAIN}.${KUBE_INGRESS_BASE_DOMAIN}'
+  - 'INGRESS_HOST=${SUBDOMAIN}.beta.k8s.${SERVER_DOMAIN}'
+  - 'URL=https://${INGRESS_HOST}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: ${URL}"'
@@ -594,7 +611,8 @@ deploy_production:
   - APPNAME=${SERVICE_NAME}
   ## Need HELM_IMAGE_TAG for 'image.tag' otherwise it falls back to 'tpl' chart's appVersion
   - HELM_IMAGE_TAG=$(grep ^appVersion ./${APP_CHART_DIR}/Chart.yaml | awk '{print $2}' | tr -d '"')
-  - 'URL=https://${SUBDOMAIN}.${SERVER_DOMAIN}'
+  - 'INGRESS_HOST=${SUBDOMAIN}.${SERVER_DOMAIN}'
+  - 'URL=https://${INGRESS_HOST}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
   - 'echo "URL: ${URL}"'
