@@ -611,7 +611,7 @@ deploy_production:
   - APPNAME=${SERVICE_NAME}
   ## Need HELM_IMAGE_TAG for 'image.tag' otherwise it falls back to 'tpl' chart's appVersion
   - HELM_IMAGE_TAG=$(grep ^appVersion ./${APP_CHART_DIR}/Chart.yaml | awk '{print $2}' | tr -d '"')
-  - 'INGRESS_HOST=https://${SUBDOMAIN}.${SERVER_DOMAIN}'
+  - 'INGRESS_HOST=${SUBDOMAIN}.${SERVER_DOMAIN}'
   - 'URL=https://${INGRESS_HOST}'
   - echo "URL=${URL}" > deploy.env
   - 'echo "APPNAME: ${APPNAME}"'
