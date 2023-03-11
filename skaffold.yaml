@@ -148,5 +148,3 @@ profiles:
           app.image.tag: "{{.IMAGE_TAG}}@{{.IMAGE_DIGEST}}"
         overrides:
           app.ingress.tls: "null"
-        setValues:
-          app.ingress.tls: "null"
