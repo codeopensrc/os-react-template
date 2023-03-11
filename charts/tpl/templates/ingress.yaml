@@ -16,14 +16,8 @@ spec:
   {{- if .Values.ingress.ingressClassName }}
   ingressClassName: {{ .Values.ingress.ingressClassName }}
   {{- end }}
-  tls:
-  {{- with .Values.ingress.tls }}
-  {{- if gt (len .hosts) 0 }}
-  - hosts:
-    {{- toYaml .hosts | nindent 4 }}
-    secretName: {{ .secretName }}
-  {{- end }}
-  {{- end }}
+  tls: 
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
   rules:
     {{- range .Values.ingress.hosts }}
     {{- $svcPort := default $defaultSvcPort .optSvcPort }}
