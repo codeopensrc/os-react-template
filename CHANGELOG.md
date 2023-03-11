@@ -1,4 +1,14 @@
 
+# 0.10.0 - (*2023-03-11*)
+
+#### **Added (4)**
+- [ [a2d8786](https://gitlab.codeopensrc.com/os/react-template/-/commit/a2d8786) ] **`added`** - Utilize ingress  
+- [ [a74b1f9](https://gitlab.codeopensrc.com/os/react-template/-/commit/a74b1f9) ] **`added`** - Add imageTag label and pre-upgrade hook to chart  
+- [ [450464c](https://gitlab.codeopensrc.com/os/react-template/-/commit/450464c) ] **`added`** - Add tcp, exec, and grpc probes and more cfg opts  
+- [ [d7a7584](https://gitlab.codeopensrc.com/os/react-template/-/commit/d7a7584) ] **`added`** - Add job to soley publish charts  
+
+<br><br><br>
+
 # 0.9.0 - (*2023-02-17*)
 
 #### **Added (1)**

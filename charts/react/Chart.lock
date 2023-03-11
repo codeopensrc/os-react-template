@@ -1,9 +1,9 @@
 dependencies:
 - name: tpl
   repository: file://../tpl
-  version: 0.7.3
+  version: 0.8.0
 - name: tpl
   repository: file://../tpl
-  version: 0.7.3
-digest: sha256:cb9d4907e8160ad36318e96d94741dd0da4e4752616fc21d6d2145e85b55f64e
-generated: "2023-02-25T19:57:08.738619664-08:00"
+  version: 0.8.0
+digest: sha256:ca5c3c0d981e0d6fbacc84616c4310bc82f5cc2c4fb332fa1e9f87c5d174d233
+generated: "2023-03-11T08:16:28.584797345Z"
