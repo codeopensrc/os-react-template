@@ -146,5 +146,8 @@ profiles:
         setValueTemplates:
           app.image.repository: "{{.IMAGE_REPO}}"
           app.image.tag: "{{.IMAGE_TAG}}@{{.IMAGE_DIGEST}}"
+          app.ingress.tls: "null"
         overrides:
-          app.ingress.tls: "[]"
+          app.ingress.tls: "null"
+        setValues:
+          app.ingress.tls: "null"
