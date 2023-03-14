@@ -43,9 +43,9 @@ Cleanup .Values.image.tag if provided.
 Add clean imageTag label if custom tag is provided.
 */}}
 {{- define "react-template.imageTagLabel" -}}
-{{- if .Values.image.tag }}
+{{- if .Values.image.tag -}}
 imageTag: {{ include "react-template.imageTag" . }}
-{{- end }}
+{{- end -}}
 {{- end }}
 
 {{/*

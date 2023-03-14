@@ -267,11 +267,13 @@ configMapData: &configMapData {}
 
 createExtraSecrets: &createExtraSecrets []
 #  - name: extrasecret1
+#    #namespace: not_release_namespace
 #    stringData:
 #      SECRETK1: secret_val1
 
 createExtraConfigMaps: &createExtraConfigMaps []
 #  - name: extracm1
+#    #namespace: not_release_namespace
 #    data:
 #      ENVK1: env_val1
 

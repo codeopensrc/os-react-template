@@ -41,6 +41,10 @@ variables:
   STOP_PROD:
     description: "USE WITH CAUTION - Used to stop production environment - Only option 'true'"
 
+
+### TODO: At this point a separate repo just for shared gitlab jobs to include is a good idea
+## https://docs.gitlab.com/ee/ci/yaml/includes.html
+
 default:
   before_script:
   - SERVICE_NAME=${SERVICE_NAME//\./-}
