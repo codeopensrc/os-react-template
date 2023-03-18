@@ -13,7 +13,6 @@ pub/index.html
 **/*.vim
 **/*.swp
 **/*.swo
-**/*.md
 **/*.env
 
 logs
