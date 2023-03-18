@@ -1,5 +1,7 @@
 "use strict";
 
+const PM2_TZ = process.env.PM2_TZ || "UTC"
+
 module.exports = {
     apps: [{
         "name": "App",
@@ -13,7 +15,7 @@ module.exports = {
         "script": "./server/server.js",
         "out_file": "./logs/server-out.log",
         "error_file": "./logs/server-err.log",
-        "log_date_format": "MM-D-YY, h:mm:ss a",
+        "log_date_format": "MM-D-YY, h:mm:ss a Z",
         "min_uptime": 10000,
         "max_restarts": 3,
         "next_gen_js": true,
@@ -21,6 +23,9 @@ module.exports = {
         "exec_mode": "cluster",
         "instances": 1,
         "kill_timeout" : 8000,
-        "wait_ready": true
+        "wait_ready": true,
+        "env": {
+            "TZ": `${PM2_TZ}`
+        }
     }]
 }

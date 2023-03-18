@@ -3,16 +3,15 @@ logs
 .git
 dumps
 
-app.bundle.js
 index.html
 npm-debug.log
 .DS_Store
-*.swp
-*.vim
-*.tgz
 
 ignore/*
-.env
-
-# Allow env yaml files
+*bundle.js
+*.env
+*.swp
+*.swo
+*.vim
+*.tgz
 env*.yaml
