@@ -24,13 +24,13 @@ app:
     #annotations:
     #  cert-manager.io/cluster-issuer: letsencrypt-staging
     hosts:
-      - host: react.k8s.example.com
-      - host: react.reloader.k8s.example.com
+      - host: react.local.test
+      - host: react.reloader.local.test
         optSvcPort: 5055
     #tls:
     #  - hosts:
-    #      - react.k8s.example.com
-    #      - react.reloader.k8s.example.com
+    #      - react.local.test
+    #      - react.reloader.local.test
     #    secretName: react-tls
   containerPorts:
     - name: http
@@ -56,10 +56,11 @@ app:
           mountPath: /var/log
   configMapData:
     DEV_DATABASE_URL_ORIGIN: "mongodb://react-db:27017"
-    LOG_EVERY_NUM_CHECKS: 5
     DEV_ENV:   "true"
     ENABLE_DB: "true"
     LIVE_RELOADER_PORT: 5055
+    LOG_EVERY_NUM_CHECKS: 5
+    #PM2_TZ: "America/Los_Angeles"
 db:
   enabled: true
   replicaCount: 1

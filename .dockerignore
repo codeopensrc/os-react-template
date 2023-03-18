@@ -1,20 +1,22 @@
 .git
 .DS_Store
 .dockerignore
-.env*
 .gitignore
 .gitlab-ci.yml
 
 npm-debug.log
-node_modules/
 Dockerfile
+build.sh
+pub/app.bundle.js
+pub/index.html
 
 **/*.vim
 **/*.swp
+**/*.swo
 **/*.md
+**/*.env
 
 logs
 dumps
-kube-deploy.sh
-build.sh
-helmchart/
+node_modules/
+charts/
