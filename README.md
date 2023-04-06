@@ -71,13 +71,13 @@ For using with a resolvable hostname see [ingress](#ingress)
 `git clone https://gitlab.codeopensrc.com/os/react-template.git`  
 `cd react-template`  
 1) Edit the `dev` service in `docker-compose.yml` to suit your needs   
-1a) (optional) Create .env file from template.  
-`cp .env.tmpl .env`  
-1b) If using windows then 2a. is not optional and both of the following uncommented and modified
-```bash
-COMPOSE_CONVERT_WINDOWS_PATHS=1  
-FOLDER_LOCATION=/ABSOLUTE/PATH/TO/WINDOWS/FOLDER/react-template  
-```
+    A) (optional) Create .env file from template.  
+    `cp .env.tmpl .env`  
+    B) If using windows then 2a. is not optional and both of the following uncommented and modified
+    ```bash
+    COMPOSE_CONVERT_WINDOWS_PATHS=1  
+    FOLDER_LOCATION=/ABSOLUTE/PATH/TO/WINDOWS/FOLDER/react-template  
+    ```
 1) Build it  
 `docker compose build dev`  
 1) Run it (`-d` for detached):  
