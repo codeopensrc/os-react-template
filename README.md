@@ -7,49 +7,87 @@
 [![Docker](https://img.shields.io/badge/Image-latest-blue?logo=Docker)](https://gitlab.codeopensrc.com/os/react-template/container_registry/10)
 
 ### Running
+- Using [docker compose](#running-with-docker-compose)  
+- Using [helm](#running-with-helm)  
+#### Running with `docker compose`
+Fastest and easiest way to run is using docker and `docker compose`  
 **[Docker Engine](https://docs.docker.com/engine/installation)**  
-**[Docker Compose](https://docs.docker.com/compose/install)**
 
+- Create a directory and `cd` into it:  
+`mkdir react-template && cd react-template`  
 - Download the `docker-compose.yml` file:  
 `curl -O https://gitlab.codeopensrc.com/os/react-template/-/raw/master/docker-compose.yml`  
+- Create an empty `.env.tmpl` file:  
 `touch .env.tmpl`  
 - Pull Image:  
-`docker-compose pull main`  
+`docker compose pull main`  
 - And run:  
-`docker-compose up main [-d]`  
+`docker compose up main [-d]`  
 - Project will be available at `localhost:5000` (main default)  
+
+#### Running with `helm`
+
+To run in a kubernetes environment, use helm.  
+**[Install Helm](https://helm.sh/docs/intro/install/)**  
+**[Helm quickstart guide](https://helm.sh/docs/intro/quickstart/)**  
+
+If you have a kubernetes environment ready and helm installed -
+
+Method 1)  
+Using the remote chart repository.
+- Add the chart repository:  
+`helm repo add os https://gitlab.codeopensrc.com/api/v4/projects/36/packages/helm/stable`  
+- Install the chart:  
+`helm upgrade --install react os/react`  
+- Port-foward a local port (here we use `5000`) to the `react-app` service:  
+`kubectl port-forward service/react-app 5000:80`  
+-   Project will be available at `localhost:5000`  
+
+Method 2)  
+Cloning and using the local chart.
+- Clone the repository:  
+`git clone https://gitlab.codeopensrc.com/os/react-template.git`  
+- Build the chart dependencies:  
+`helm dependency build react-template/charts/react`
+- (Optional) Add/modify values in the `values.yaml` file:  
+`vi react-template/charts/react/values.yaml`  
+  - See `react-template/charts/tpl/values.yaml` for full list of values
+- Install the chart:  
+`helm upgrade --install react react-template/charts/react`  
+- Port-foward a local port (here we use `5000`) to the `react-app` service:  
+`kubectl port-forward service/react-app 5000:80`  
+- Project will be available at `localhost:5000`  
+
+TODO: ingress section  
+For using with a resolvable hostname see [ingress](#ingress)  
 
 ---
 
 ### Development  
-1) Clone  
+- Using [docker compose](#developing-with-docker-compose) 
+- TODO: Using [skaffold, helm, and minikube/k8s cluster](#todo-developing-with-skaffold)
+#### Developing with `docker compose`
+1) Clone  and change into project directory  
 `git clone https://gitlab.codeopensrc.com/os/react-template.git`  
-
-2) Edit the `dev` service in `docker-compose.yml` to suit your needs   
-2a) (optional) Create .env file from template.  
-`cp .env.tmpl .env`  
-2b) If using windows then 2a. is not optional and both of the following uncommented and modified
-```bash
-COMPOSE_CONVERT_WINDOWS_PATHS=1  
-FOLDER_LOCATION=/ABSOLUTE/PATH/TO/WINDOWS/FOLDER/react-template  
-```
-
-3) Build it  
-`docker-compose build dev`  
-
-4) In project root run:  
-`docker-compose up dev [-d]`  
-
-5) Project will be available at `localhost:5005` (dev default)  
-
-6) Run webpack inside the container. (Another terminal if not using `-d`):  
+`cd react-template`  
+1) Edit the `dev` service in `docker-compose.yml` to suit your needs   
+    A) (optional) Create .env file from template.  
+    `cp .env.tmpl .env`  
+    B) If using windows then 2a. is not optional and both of the following uncommented and modified
+    ```bash
+    COMPOSE_CONVERT_WINDOWS_PATHS=1  
+    FOLDER_LOCATION=/ABSOLUTE/PATH/TO/WINDOWS/FOLDER/react-template  
+    ```
+1) Build it  
+`docker compose build dev`  
+1) Run it (`-d` for detached):  
+`docker compose up dev [-d]`  
+1) Project will be available at `localhost:5005` (dev default)  
+1) Run webpack inside the container. (Another terminal if not using `-d`):  
 `docker exec CONTAINER_NAME npm run watch`  
+1) Modify files in `src/*` and `server/*`  
+1) See changes at `localhost:5005`  
 
-7) Modify files in `src/*` and `server/*`  
-
-8) See changes at `localhost:5005`  
-
----
 
 ### Hot Reloading
 
@@ -64,9 +102,8 @@ The `-it` allows Ctrl+c to stop the `webpack-dev-server` started inside of the c
 - Instead of loading `localhost:5005`, load `localhost:5055`  
 See ports in `docker-compose.yml` and `src/config/webpack.config.js` to adjust.  
 
-Now with `:5055` loaded in the browser, when you update a react component you can see the page re-render it. The component should keep its state and will not re-run `componentDidMount`.  
+Now with `:5055` loaded in the browser, when you update a react component you can see the page re-render it. The component should keep its state and will not re-run `componentDidMount`/`useEffect` functions.  
 
----
 
 ### Database
 
@@ -89,6 +126,12 @@ Now when `docker-compose up dev` is run, a mongodb image will be pulled, start, 
 
 ---
 
+#### TODO Developing with `skaffold`
+
+
+
+---
+
 ### Source
 Development being done using a self-hosted GitLab instance.  
 **[GitLab](https://gitlab.codeopensrc.com/os/react-template)**  
@@ -99,6 +142,5 @@ Development being done using a self-hosted GitLab instance.
 - Feel free to submit [pull requests on GitHub](https://github.com/codeopensrc/os-react-template/pulls)
 
 ### TODO Writeups
-- Docker buildargs, tagging, and pushing
 - Gitlab CI/CD. See `.gitlab-ci.yml`  
-- Kubernetes. See `kube-deploy.sh` and `.gitlab-ci.yml` 
+- Skaffold / Kubernetes / Helm  
