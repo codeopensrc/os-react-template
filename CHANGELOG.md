@@ -1,4 +1,11 @@
 
+# 0.11.0 - (*2024-09-24*)
+
+#### **Changed (1)**
+- [ [2681634](https://gitlab.codeopensrc.com/os/react-template/-/commit/2681634) ] **`changed`** - Update alpine, node, and npm  
+
+<br><br><br>
+
 # 0.10.0 - (*2023-03-11*)
 
 #### **Added (4)**
