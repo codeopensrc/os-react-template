@@ -3,7 +3,7 @@
 app:
   enabled: true
   image:
-    tag: 0.11.0-6a109b6
+    tag: 0.11.0-9d250c5
   secretStringData:
     MONGO_DB_NAME: "react"
     SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
