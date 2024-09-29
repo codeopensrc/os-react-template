@@ -37,7 +37,7 @@ services:
         ports: ["27017:27017"]
         restart: on-failure
         environment:
-            MONGO_INITDB_DATABASE: "${MONGO_DB_NAME:-mongo}"
+            MONGO_INITDB_DATABASE: "${MONGO_DB_NAME:-react}"
         volumes:
             - temp_data:/data/db
     ###############################################################

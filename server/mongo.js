@@ -3,6 +3,7 @@
 const mongoose = require('mongoose')
 const serverState = require("./serverState.js");
 const consul = require("./consul.js");
+const auth = require("./auth.js");
 
 const ObjectID = mongoose.Types.ObjectId
 const CONSUL_RETRY_INTERVAL = 1000 * 2
@@ -93,14 +94,8 @@ module.exports = {
         res.end(JSON.stringify({status: "Error"}));
     },
 
-    resWithNoAccess: function (res) {
-        res.writeHead(403, {'Access-Control-Allow-Origin' : '*'} );
-        res.end(JSON.stringify({authorized: false}));
-    },
-
-
     // ================================================================
-    // ================ Sample CRUD Operation for mongo =============== 
+    // ================ CRUD Operation for mongo =============== 
     // ================================================================ 
     retrieve: function (type, res) {
         let db = this.db
@@ -130,45 +125,51 @@ module.exports = {
     },
 
     // clientJson: {secretKey: key, doc: {mongoJsonDoc}}
-    submit: function (clientJson, type, res) {
-        if(clientJson.secretKey !== SECRET_KEY) { return this.resWithNoAccess(res); }
-        delete clientJson.secretKey
+    submit: function (clientJson, type, headers, res) {
+        auth.getAccess(headers, "user", ({status, data}) => {
+            if(clientJson.secretKey !== SECRET_KEY || !status) { return auth.resWithNoAccess(res); }
+            if(status === "error") { return this.resWithErr(err, res); }
+            delete clientJson.secretKey
+            let db = this.db
+            if(!db) { return this.resWithErr("No DB Connection", res) }
+            let collection = db.collection(type);
 
-        let db = this.db
-        if(!db) { return this.resWithErr("No DB Connection", res) }
-        let collection = db.collection(type);
+            let doc = clientJson.doc ? clientJson.doc : clientJson;
+            //Update if id provided, otherwise creates new id and entry
+            let id = doc.id ? ObjectID(doc.id) : ObjectID()
 
-        let doc = clientJson.doc ? clientJson.doc : clientJson;
-        //Update if id provided, otherwise creates new id and entry
-        let id = doc.id ? ObjectID(doc.id) : ObjectID()
-        delete doc.id
+            delete doc.id
 
-        collection.updateOne({"_id": id}, {$set: doc}, {upsert: true}, (err, docs) => {
-            if(err) { return this.resWithErr(err, res) }
-            doc._id = id
-            res.setHeader("Content-Type", "application/json")
-            res.writeHead(200, {'Access-Control-Allow-Origin' : '*'} );
-            res.end(JSON.stringify(doc));
-        });
+            collection.updateOne({"_id": id}, {$set: doc}, {upsert: true}, (err, docs) => {
+                if(err) { return this.resWithErr(err, res) }
+                doc._id = id
+                res.setHeader("Content-Type", "application/json")
+                res.writeHead(200, {'Access-Control-Allow-Origin' : '*'} );
+                res.end(JSON.stringify(doc));
+            });
+        })
     },
 
     // clientJson: {secretKey: key, doc: {id: mongoObjectID}}
-    remove: function (clientJson, type, res) {
-        if(clientJson.secretKey !== SECRET_KEY) { return this.resWithNoAccess(res); }
-        delete clientJson.secretKey
+    remove: function (clientJson, type, headers, res) {
+        auth.getAccess(headers, "user", ({status, data}) => {
+            if(clientJson.secretKey !== SECRET_KEY || !status) { return auth.resWithNoAccess(res); }
+            if(status === "error") { return this.resWithErr(err, res); }
+            delete clientJson.secretKey
 
-        let db = this.db
-        if(!db) { return this.resWithErr("No DB Connection", res) }
-        let collection = db.collection(type);
+            let db = this.db
+            if(!db) { return this.resWithErr("No DB Connection", res) }
+            let collection = db.collection(type);
 
-        let doc = clientJson.doc ? clientJson.doc : clientJson;
-        let id = doc.id ? ObjectID(doc.id) : "";
+            let doc = clientJson.doc ? clientJson.doc : clientJson;
+            let id = doc.id ? ObjectID(doc.id) : "";
 
-        collection.findOneAndDelete({"_id": id}, (err, docs) => {
-            if(err) { return this.resWithErr(err, res) }
-            res.setHeader("Content-Type", "text/html")
-            res.writeHead(200, {'Access-Control-Allow-Origin' : '*'} );
-            res.end(JSON.stringify("success"));
-        });
+            collection.findOneAndDelete({"_id": id}, (err, docs) => {
+                if(err) { return this.resWithErr(err, res) }
+                res.setHeader("Content-Type", "text/html")
+                res.writeHead(200, {'Access-Control-Allow-Origin' : '*'} );
+                res.end(JSON.stringify("success"));
+            });
+        })
     },
 }

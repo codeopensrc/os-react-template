@@ -197,6 +197,7 @@ default:
         SAMPLE_SECRET: "${SAMPLE_SECRET}"
       configMapData:
         ENABLE_DB:            "${ENABLE_DB}"
+        AUTH_URL:             "${AUTH_URL}"
         DEV_DATABASE_URL_ORIGIN: "mongodb://${APPNAME}-db:27017"
     db:
       enabled: $ENABLE_DB
@@ -604,6 +605,7 @@ deploy_production:
   - kubernetes_prod
   variables:
     KUBE_NAMESPACE: production
+    #AUTH_URL: ${CI_SERVER_URL}
   script:
   - echo "$KUBE_NAMESPACE"
   - APPNAME=${SERVICE_NAME}
