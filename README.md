@@ -86,7 +86,7 @@ For using with a resolvable hostname see [ingress](#ingress)
 1) Run webpack inside the container. (Another terminal if not using `-d`):  
 `docker exec CONTAINER_NAME npm run watch`  
 1) Modify files in `src/*` and `server/*`  
-1) See changes at `localhost:5005`  
+1) See changes (after page refresh) at `localhost:5005`  
 
 
 ### Hot Reloading
