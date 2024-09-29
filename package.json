@@ -2,7 +2,8 @@
     "name": "Base-React-App",
     "version": "0.0.0",
     "dependencies": {
-        "mongoose": "^6.0.0"
+        "mongoose": "^6.0.0",
+        "os-npm-util": "https://github.com/codeopensrc/os-npm-util/tarball/master#0.10.0"
     },
     "devDependencies": {
         "@babel/core": "^7.15.5",

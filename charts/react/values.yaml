@@ -1,7 +1,7 @@
 app:
   enabled: true
   secretStringData:
-    MONGO_DB_NAME: "mongo"
+    MONGO_DB_NAME: "react"
     SAMPLE_SECRET: "SAMPLE_SECRET_ENV_VAR"
   configMapData:
     DEV_DATABASE_URL_ORIGIN: "mongodb://react-db:27017"
