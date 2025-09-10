@@ -1,4 +1,15 @@
 
+# 0.12.0 - (*2025-09-10*)
+
+#### **Added (2)**
+- [ [6a109b6](https://gitlab.codeopensrc.com/os/react-template/-/commit/6a109b6) ] **`added`** - Add image.tag to chart/values.yaml  
+- [ [b576b75](https://gitlab.codeopensrc.com/os/react-template/-/commit/b576b75) ] **`added, changed`** - Update defaults across various files  
+
+#### **Changed (1)**
+- [ [af44e82](https://gitlab.codeopensrc.com/os/react-template/-/commit/af44e82) ] **`changed`** - Update alpine, node, npm  
+
+<br><br><br>
+
 # 0.11.0 - (*2024-09-24*)
 
 #### **Changed (1)**
